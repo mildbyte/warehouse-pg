@@ -49,6 +49,15 @@ public:
 	// output distribution accessor
 	virtual CDistributionSpec *Pds() const = 0;
 
+	// An Arrow motion over a ToArrow would ship rows PG can ship itself
+	// through an island that only converts them, so its input must be a real
+	// Arrow operator.
+	EExecEngine
+	EeRequired(CExpressionHandle &, ULONG) const override
+	{
+		return EeeArrow == ExecEngine() ? EeeArrowNative : ExecEngine();
+	}
+
 	// check if optimization contexts is valid
 	BOOL FValidContext(CMemoryPool *mp, COptimizationContext *poc,
 					   COptimizationContextArray *pdrgpocChild) const override;

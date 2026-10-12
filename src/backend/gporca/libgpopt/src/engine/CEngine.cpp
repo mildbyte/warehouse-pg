@@ -2392,9 +2392,11 @@ CEngine::FCheckReqdProps(CExpressionHandle &exprhdl, CReqdPropPlan *prpp,
 	}
 
 	// Under an Arrow request a PG operator can only be the input of a
-	// ToArrow. Allowing only producers (scans, motions) there keeps every PG
-	// subtree from being optimized again for each Arrow context.
-	static const BOOL fLeavesOnly = nullptr == std::getenv("ORCA_ARROW_ANY_INPUT");
+	// ToArrow, and it is FCheckEnfdProps on that operator that adds the
+	// ToArrow. Rejecting non-producers here saves planning time, but then a
+	// context only sees a ToArrow if another context happened to add one to
+	// the group before it was optimized, so plans depend on job order.
+	static const BOOL fLeavesOnly = nullptr != std::getenv("ORCA_ARROW_LEAVES_ONLY");
 	if (fLeavesOnly && EeeArrow == EeBase(prpp->Ee()) &&
 		EeePG == popPhysical->ExecEngine() &&
 		COperator::EopPhysicalEngineConvert != op_id &&
