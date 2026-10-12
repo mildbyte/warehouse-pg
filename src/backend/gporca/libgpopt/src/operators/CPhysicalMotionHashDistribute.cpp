@@ -70,7 +70,8 @@ CPhysicalMotionHashDistribute::Matches(COperator *pop) const
 	CPhysicalMotionHashDistribute *popHashDistribute =
 		CPhysicalMotionHashDistribute::PopConvert(pop);
 
-	return m_pdsHashed->Equals(popHashDistribute->m_pdsHashed);
+	return m_pdsHashed->Equals(popHashDistribute->m_pdsHashed) &&
+		   ExecEngine() == popHashDistribute->ExecEngine();
 }
 
 //---------------------------------------------------------------------------

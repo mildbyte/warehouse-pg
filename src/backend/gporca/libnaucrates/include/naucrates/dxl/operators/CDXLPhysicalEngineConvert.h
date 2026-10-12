@@ -25,10 +25,16 @@ class CDXLPhysicalEngineConvert : public CDXLPhysical
 private:
 	BOOL m_to_arrow;
 
+	// the conversion sits at an Arrow motion: the ToPG side emits Arrow
+	// batches serialized into (segment, payload) rows, the ToArrow side
+	// decodes them
+	BOOL m_ipc;
+
 public:
 	CDXLPhysicalEngineConvert(const CDXLPhysicalEngineConvert &) = delete;
 
-	CDXLPhysicalEngineConvert(CMemoryPool *mp, BOOL to_arrow);
+	CDXLPhysicalEngineConvert(CMemoryPool *mp, BOOL to_arrow,
+							  BOOL ipc = false);
 
 	Edxlopid GetDXLOperator() const override;
 
@@ -38,6 +44,12 @@ public:
 	IsToArrow() const
 	{
 		return m_to_arrow;
+	}
+
+	BOOL
+	IsIpc() const
+	{
+		return m_ipc;
 	}
 
 	void SerializeToDXL(CXMLSerializer *xml_serializer,

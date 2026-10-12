@@ -95,7 +95,8 @@ CPhysicalMotionGather::Matches(COperator *pop) const
 
 	CPhysicalMotionGather *popGather = CPhysicalMotionGather::PopConvert(pop);
 
-	return Est() == popGather->Est() && m_pos->Matches(popGather->Pos());
+	return Est() == popGather->Est() && m_pos->Matches(popGather->Pos()) &&
+		   ExecEngine() == popGather->ExecEngine();
 }
 
 //---------------------------------------------------------------------------

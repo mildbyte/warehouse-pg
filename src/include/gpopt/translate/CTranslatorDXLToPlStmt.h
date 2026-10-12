@@ -351,6 +351,10 @@ private:
 		const CDXLNode *island_dxlnode, CDXLTranslateContext *output_context,
 		CDXLTranslationContextArray *ctxt_translation_prev_siblings);
 
+	void TranslateDXLArrowMotion(const CDXLNode *motion_dxlnode,
+								 const CDXLNode *island_dxlnode,
+								 CustomScan *island, Motion *motion);
+
 	void CollectArrowIslandLeaves(
 		const CDXLNode *dxlnode, CDXLTranslateContext *output_context,
 		CDXLTranslationContextArray *ctxt_translation_prev_siblings,

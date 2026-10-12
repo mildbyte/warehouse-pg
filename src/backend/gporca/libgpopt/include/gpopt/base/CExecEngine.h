@@ -68,7 +68,8 @@ enum EArrowCapability
 	EacOperator,	   // operator oid
 	EacFunction,	   // function oid
 	EacAggregate,	   // single-stage aggregate oid
-	EacAggregateSplit  // aggregate oid whose partial state is a plain value
+	EacAggregateSplit,	// aggregate oid whose partial state is a plain value
+	EacMotionKey		// type oid the engine can hash like cdbhash
 };
 
 // mirrors OrcaEngineOp
@@ -80,7 +81,8 @@ enum EArrowOp
 	EaopHashJoin,
 	EaopComputeScalar,
 	EaopFilter,
-	EaopSort  // sort enforcers and limits
+	EaopSort,  // sort enforcers and limits
+	EaopMotion	// motions that ship Arrow batches
 };
 
 using FnArrowCapability = BOOL (*)(EArrowCapability kind, ULONG oid);
@@ -102,6 +104,7 @@ struct SArrowEngineConfig
 extern SArrowEngineConfig g_arrow_engine;
 
 class COrderSpec;
+class CExpressionHandle;
 
 class CArrowEngineUtils
 {
@@ -119,6 +122,12 @@ public:
 
 	// whether a sort on the given keys can run in Arrow
 	static BOOL FOrderSupported(COrderSpec *pos);
+
+	// Arrow twin of a motion enforcer placed over the expression exprhdl
+	// describes, or null when the motion can't ship Arrow batches
+	static CExpression *PexprArrowMotion(CMemoryPool *mp,
+										 CExpressionHandle &exprhdl,
+										 CExpression *pexprMotion);
 };
 
 }  // namespace gpopt

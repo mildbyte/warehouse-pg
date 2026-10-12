@@ -6,6 +6,15 @@
 
 #include "gpopt/base/COrderSpec.h"
 
+#include "gpopt/base/CDistributionSpecHashed.h"
+#include "gpopt/base/CDistributionSpecReplicated.h"
+#include "gpopt/base/CDrvdPropPlan.h"
+#include "gpopt/base/CUtils.h"
+#include "gpopt/operators/CExpressionHandle.h"
+#include "gpopt/operators/CPhysicalMotionBroadcast.h"
+#include "gpopt/operators/CPhysicalMotionGather.h"
+#include "gpopt/operators/CPhysicalMotionHashDistribute.h"
+
 #include "gpopt/base/CColRef.h"
 #include "gpopt/base/CColRefSet.h"
 #include "gpopt/base/CColRefSetIter.h"
@@ -297,4 +306,82 @@ CArrowEngineUtils::FScalarSupported(CExpression *pexpr)
 		}
 	}
 	return true;
+}
+
+// An Arrow motion ships the child's batches as (segment, IPC payload) rows
+// over the regular interconnect, so it is a plain Motion whose engine is
+// Arrow on both ends. Merging gathers and the duplicate-hazard redistributes
+// GPDB turns into hash filters stay PG; hash keys must be columns the engine
+// can hash exactly like cdbhash, so the result is co-located with tables.
+CExpression *
+CArrowEngineUtils::PexprArrowMotion(CMemoryPool *mp, CExpressionHandle &exprhdl,
+									CExpression *pexprMotion)
+{
+	if (!FEnabled(EaopMotion))
+	{
+		return nullptr;
+	}
+
+	COperator *pop = pexprMotion->Pop();
+	CPhysicalMotion *popArrow = nullptr;
+	switch (pop->Eopid())
+	{
+		case COperator::EopPhysicalMotionHashDistribute:
+		{
+			CDistributionSpecHashed *pdsHashed = CDistributionSpecHashed::PdsConvert(
+				CPhysicalMotionHashDistribute::PopConvert(pop)->Pds());
+			if (CDistributionSpec::EdtHashed != pdsHashed->Edt() ||
+				CUtils::FDuplicateHazardDistributionSpec(
+					CDrvdPropPlan::Pdpplan(exprhdl.Pdp())->Pds()))
+			{
+				return nullptr;
+			}
+			CExpressionArray *pdrgpexpr = pdsHashed->Pdrgpexpr();
+			for (ULONG ul = 0; ul < pdrgpexpr->Size(); ul++)
+			{
+				COperator *popKey = (*pdrgpexpr)[ul]->Pop();
+				if (COperator::EopScalarIdent != popKey->Eopid() ||
+					!FAsk(EacMotionKey, CScalarIdent::PopConvert(popKey)
+											->Pcr()
+											->RetrieveType()
+											->MDId()))
+				{
+					return nullptr;
+				}
+			}
+			pdsHashed->AddRef();
+			popArrow = GPOS_NEW(mp) CPhysicalMotionHashDistribute(mp, pdsHashed);
+			break;
+		}
+
+		case COperator::EopPhysicalMotionGather:
+		{
+			CPhysicalMotionGather *popGather =
+				CPhysicalMotionGather::PopConvert(pop);
+			if (!popGather->Pos()->IsEmpty())
+			{
+				return nullptr;
+			}
+			popArrow = GPOS_NEW(mp) CPhysicalMotionGather(mp, popGather->Est());
+			break;
+		}
+
+		case COperator::EopPhysicalMotionBroadcast:
+		{
+			CDistributionSpecReplicated *pds =
+				CDistributionSpecReplicated::PdsConvert(
+					CPhysicalMotionBroadcast::PopConvert(pop)->Pds());
+			popArrow = GPOS_NEW(mp)
+				CPhysicalMotionBroadcast(mp, pds->FIgnoreBroadcastThreshold());
+			break;
+		}
+
+		default:
+			return nullptr;
+	}
+
+	popArrow->SetExecEngine(EeeArrow);
+	CExpression *pexprChild = (*pexprMotion)[0];
+	pexprChild->AddRef();
+	return GPOS_NEW(mp) CExpression(mp, popArrow, pexprChild);
 }

@@ -2447,6 +2447,11 @@ CCostModelGPDB::Cost(
 			case COperator::EopPhysicalFilter:
 				op = EaopFilter;
 				break;
+			case COperator::EopPhysicalMotionGather:
+			case COperator::EopPhysicalMotionBroadcast:
+			case COperator::EopPhysicalMotionHashDistribute:
+				op = EaopMotion;
+				break;
 			default:
 				op = EaopHashAgg;
 		}

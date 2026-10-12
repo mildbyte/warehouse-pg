@@ -43,7 +43,8 @@ typedef enum OrcaEngineAsk
 	ORCA_ENGINE_ASK_OPERATOR,
 	ORCA_ENGINE_ASK_FUNCTION,
 	ORCA_ENGINE_ASK_AGG,		/* single-stage aggregate */
-	ORCA_ENGINE_ASK_AGG_SPLIT	/* aggregate whose partial state is a plain value */
+	ORCA_ENGINE_ASK_AGG_SPLIT,	/* aggregate whose partial state is a plain value */
+	ORCA_ENGINE_ASK_MOTION_KEY	/* type the engine hashes exactly like cdbhash */
 } OrcaEngineAsk;
 
 typedef enum OrcaEngineOp
@@ -53,8 +54,18 @@ typedef enum OrcaEngineOp
 	ORCA_ENGINE_OP_HASH_AGG,
 	ORCA_ENGINE_OP_HASH_JOIN,
 	ORCA_ENGINE_OP_COMPUTE_SCALAR,
-	ORCA_ENGINE_OP_FILTER
+	ORCA_ENGINE_OP_FILTER,
+	ORCA_ENGINE_OP_SORT,
+	ORCA_ENGINE_OP_MOTION		/* motion shipping engine batches */
 } OrcaEngineOp;
+
+/*
+ * An engine motion ships an island's output as rows of these two columns:
+ * the target segment (for redistribution) and a serialized batch. The
+ * sending island's custom_private gets a second String with its route.
+ */
+#define ARROW_MOTION_SEGID_COL "arrow_segid"
+#define ARROW_MOTION_PAYLOAD_COL "arrow_payload"
 
 typedef struct OrcaEngineConfig
 {

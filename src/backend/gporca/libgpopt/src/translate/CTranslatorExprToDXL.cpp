@@ -4771,11 +4771,29 @@ CTranslatorExprToDXL::PdxlnMotion(CExpression *pexprMotion,
 
 	// extract components
 	CExpression *pexprChild = (*pexprMotion)[0];
+	const BOOL fArrow =
+		EeeArrow == CPhysical::PopConvert(pexprMotion->Pop())->ExecEngine();
 
-	// translate relational child expression
+	// translate relational child expression; an Arrow child must not get a
+	// remapping Result on top
 	CDXLNode *child_dxlnode = CreateDXLNode(
 		pexprChild, colref_array, pdrgpdsBaseTables, pulNonGatherMotions, pfDML,
-		true /*fRemap*/, false /*fRoot*/);
+		!fArrow /*fRemap*/, false /*fRoot*/);
+
+	// An Arrow motion is a PG motion between two IPC conversions: the island
+	// below emits its batches as (segment, payload) rows routed by the
+	// motion, and the island above decodes them.
+	if (fArrow)
+	{
+		GPOS_ASSERT(!CUtils::FDuplicateHazardMotion(pexprMotion));
+		CDXLNode *pdxlnSend = GPOS_NEW(m_mp) CDXLNode(
+			m_mp, GPOS_NEW(m_mp) CDXLPhysicalEngineConvert(m_mp, false, true));
+		pdxlnSend->SetProperties(GetProperties(pexprChild));
+		pdxlnSend->AddChild(CTranslatorExprToDXLUtils::PdxlnProjListFromChildProjList(
+			m_mp, m_pcf, m_phmcrdxln, (*child_dxlnode)[0]));
+		pdxlnSend->AddChild(child_dxlnode);
+		child_dxlnode = pdxlnSend;
+	}
 
 	// construct a motion node
 	CDXLPhysicalMotion *motion = nullptr;
@@ -4894,6 +4912,17 @@ CTranslatorExprToDXL::PdxlnMotion(CExpression *pexprMotion,
 #ifdef GPOS_DEBUG
 	motion->AssertValid(pdxlnMotion, false /* validate_children */);
 #endif
+
+	if (fArrow)
+	{
+		CDXLNode *pdxlnRecv = GPOS_NEW(m_mp) CDXLNode(
+			m_mp, GPOS_NEW(m_mp) CDXLPhysicalEngineConvert(m_mp, true, true));
+		pdxlnRecv->SetProperties(GetProperties(pexprMotion));
+		pdxlnRecv->AddChild(CTranslatorExprToDXLUtils::PdxlnProjListFromChildProjList(
+			m_mp, m_pcf, m_phmcrdxln, proj_list_dxlnode));
+		pdxlnRecv->AddChild(pdxlnMotion);
+		return pdxlnRecv;
+	}
 
 	return pdxlnMotion;
 }

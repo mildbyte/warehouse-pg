@@ -48,6 +48,8 @@ extern "C" {
 #include "gpos/common/CBitSetIter.h"
 #include "gpos/io/COstreamString.h"
 
+#include <string>
+
 #include "gpopt/base/CUtils.h"
 #include "gpopt/gpdbwrappers.h"
 #include "gpopt/mdcache/CMDAccessor.h"
@@ -94,6 +96,7 @@ extern "C" {
 #include "naucrates/dxl/operators/CDXLScalarBoolExpr.h"
 #include "naucrates/dxl/operators/CDXLScalarFuncExpr.h"
 #include "naucrates/dxl/operators/CDXLScalarHashExpr.h"
+#include "naucrates/dxl/operators/CDXLScalarIdent.h"
 #include "naucrates/dxl/operators/CDXLScalarNullTest.h"
 #include "naucrates/dxl/operators/CDXLScalarOpExpr.h"
 #include "naucrates/dxl/operators/CDXLScalarProjElem.h"
@@ -593,7 +596,35 @@ CTranslatorDXLToPlStmt::TranslateDXLArrowIsland(
 		(*island_dxlnode)[EdxlengineconvertIndexProjList];
 	List *target_list = NIL;
 	List *scan_tlist = NIL;
-	for (ULONG ul = 0; ul < proj_list_dxlnode->Arity(); ul++)
+	if (dxlop->IsIpc())
+	{
+		// The island feeds an Arrow motion; the motion above routes its
+		// rows and nothing references the island's columns directly.
+		const struct
+		{
+			const char *name;
+			Oid type;
+		} cols[] = {{ARROW_MOTION_SEGID_COL, INT4OID},
+					{ARROW_MOTION_PAYLOAD_COL, BYTEAOID}};
+		for (ULONG ul = 0; ul < 2; ul++)
+		{
+			Var *var = gpdb::MakeVar(INDEX_VAR, (AttrNumber)(ul + 1),
+									 cols[ul].type, -1, 0);
+			TargetEntry *te = MakeNode(TargetEntry);
+			te->expr = (Expr *) var;
+			te->resno = (AttrNumber)(ul + 1);
+			te->resname = PStrDup(cols[ul].name);
+			target_list = gpdb::LAppend(target_list, te);
+
+			TargetEntry *scan_te = MakeNode(TargetEntry);
+			scan_te->expr = (Expr *) gpdb::MakeNULLConst(cols[ul].type);
+			scan_te->resno = (AttrNumber)(ul + 1);
+			scan_te->resname = te->resname;
+			scan_tlist = gpdb::LAppend(scan_tlist, scan_te);
+		}
+	}
+	for (ULONG ul = 0; !dxlop->IsIpc() && ul < proj_list_dxlnode->Arity();
+		 ul++)
 	{
 		CDXLNode *proj_elem_dxlnode = (*proj_list_dxlnode)[ul];
 		CDXLScalarProjElem *proj_elem =
@@ -645,6 +676,113 @@ CTranslatorDXLToPlStmt::TranslateDXLArrowIsland(
 
 	SetParamIds(plan);
 	return (Plan *) cscan;
+}
+
+// An Arrow motion moves the (segment, payload) rows of the island below it.
+// Redistribution becomes an explicit motion on the segment column, which the
+// island computes with cdbhash; it learns how from a route appended to its
+// custom_private: "gather", "broadcast" or "hash <numsegs> <attno>:<hashfunc>...",
+// attnos referring to the island's DXL project list.
+void
+CTranslatorDXLToPlStmt::TranslateDXLArrowMotion(const CDXLNode *motion_dxlnode,
+												const CDXLNode *island_dxlnode,
+												CustomScan *island,
+												Motion *motion)
+{
+	CDXLPhysicalMotion *motion_dxlop =
+		CDXLPhysicalMotion::Cast(motion_dxlnode->GetOperator());
+	if (CTranslatorUtils::IsDuplicateSensitiveMotion(motion_dxlop))
+	{
+		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
+				   GPOS_WSZ_LIT("duplicate-sensitive Arrow motion"));
+	}
+
+	List *target_list = NIL;
+	const Oid types[] = {INT4OID, BYTEAOID};
+	const char *names[] = {ARROW_MOTION_SEGID_COL, ARROW_MOTION_PAYLOAD_COL};
+	for (ULONG ul = 0; ul < 2; ul++)
+	{
+		TargetEntry *te = MakeNode(TargetEntry);
+		te->expr = (Expr *) gpdb::MakeVar(OUTER_VAR, (AttrNumber)(ul + 1),
+										  types[ul], -1, 0);
+		te->resno = (AttrNumber)(ul + 1);
+		te->resname = PStrDup(names[ul]);
+		target_list = gpdb::LAppend(target_list, te);
+	}
+	motion->plan.targetlist = target_list;
+	motion->plan.qual = NIL;
+	motion->sendSorted = false;
+	motion->numSortCols = 0;
+	motion->hashExprs = NIL;
+	motion->hashFuncs = nullptr;
+
+	std::string route;
+	char buf[64];
+	switch (motion_dxlop->GetDXLOperator())
+	{
+		case EdxlopPhysicalMotionGather:
+			motion->motionType = MOTIONTYPE_GATHER;
+			route = "gather";
+			break;
+		case EdxlopPhysicalMotionBroadcast:
+			motion->motionType = MOTIONTYPE_BROADCAST;
+			route = "broadcast";
+			break;
+		case EdxlopPhysicalMotionRedistribute:
+		{
+			motion->motionType = MOTIONTYPE_EXPLICIT;
+			motion->segidColIdx = 1;
+			snprintf(buf, sizeof(buf), "hash %d",
+					 (int) motion_dxlop->GetOutputSegIdsArray()->Size());
+			route = buf;
+			CDXLNode *proj_list =
+				(*island_dxlnode)[EdxlengineconvertIndexProjList];
+			CDXLNode *hash_list = (*motion_dxlnode)[EdxlrmIndexHashExprList];
+			for (ULONG ul = 0; ul < hash_list->Arity(); ul++)
+			{
+				CDXLNode *hash_expr = (*hash_list)[ul];
+				CDXLScalarHashExpr *hash_dxlop =
+					CDXLScalarHashExpr::Cast(hash_expr->GetOperator());
+				const CDXLColRef *colref =
+					CDXLScalarIdent::Cast((*hash_expr)[0]->GetOperator())
+						->GetDXLColRef();
+				ULONG attno = 0;
+				for (ULONG pos = 0; pos < proj_list->Arity(); pos++)
+				{
+					if (CDXLScalarProjElem::Cast(
+							(*proj_list)[pos]->GetOperator())
+							->Id() == colref->Id())
+					{
+						attno = pos + 1;
+						break;
+					}
+				}
+				if (0 == attno)
+				{
+					GPOS_RAISE(gpdxl::ExmaDXL,
+							   gpdxl::ExmiDXL2PlStmtConversion,
+							   GPOS_WSZ_LIT("Arrow motion key not shipped"));
+				}
+				Oid typeoid = CMDIdGPDB::CastMdid(colref->MdidType())->Oid();
+				Oid hashfunc =
+					GPOS_FTRACE(EopttraceConsiderOpfamiliesForDistribution)
+						? gpdb::GetHashProcInOpfamily(
+							  CMDIdGPDB::CastMdid(hash_dxlop->MdidOpfamily())
+								  ->Oid(),
+							  typeoid)
+						: m_dxl_to_plstmt_context
+							  ->GetDistributionHashFuncForType(typeoid);
+				snprintf(buf, sizeof(buf), " %u:%u", attno, hashfunc);
+				route += buf;
+			}
+			break;
+		}
+		default:
+			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
+					   GPOS_WSZ_LIT("unsupported Arrow motion"));
+	}
+	island->custom_private =
+		gpdb::LAppend(island->custom_private, gpdb::MakeStringValue(PStrDup(route.c_str())));
 }
 
 void
@@ -2558,6 +2696,18 @@ CTranslatorDXLToPlStmt::TranslateDXLMotion(
 
 	Plan *child_plan = TranslateDXLOperatorToPlan(
 		child_dxlnode, &child_context, ctxt_translation_prev_siblings);
+
+	if (EdxlopPhysicalEngineConvert ==
+			child_dxlnode->GetOperator()->GetDXLOperator() &&
+		CDXLPhysicalEngineConvert::Cast(child_dxlnode->GetOperator())->IsIpc())
+	{
+		TranslateDXLArrowMotion(motion_dxlnode, child_dxlnode,
+								(CustomScan *) child_plan, motion);
+		m_dxl_to_plstmt_context->SetCurrentSlice(recvslice);
+		plan->lefttree = child_plan;
+		SetParamIds(plan);
+		return (Plan *) motion;
+	}
 
 	CDXLTranslationContextArray *child_contexts =
 		GPOS_NEW(m_mp) CDXLTranslationContextArray(m_mp);
