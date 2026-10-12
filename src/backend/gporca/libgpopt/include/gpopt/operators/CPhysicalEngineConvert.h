@@ -106,7 +106,9 @@ public:
 	EExecEngine
 	EeRequired(CExpressionHandle &, ULONG) const override
 	{
-		return EeeArrow == m_target ? EeePGNative : EeeArrowNative;
+		// ToPG's child must be natively Arrow, which already stops ToArrow and
+		// ToPG from requesting each other forever; ToArrow can take any PG plan.
+		return EeeArrow == m_target ? EeePG : EeeArrowNative;
 	}
 
 	EExecEngine

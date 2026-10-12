@@ -29,15 +29,55 @@ typedef void *(*plan_hint_hook_type) (Query *parse);
 extern PGDLLIMPORT plan_hint_hook_type plan_hint_hook;
 
 /*
- * Asked by Orca whether a type/operator/function/aggregate oid can run in
- * the extension's Arrow engine. kind: 0 type, 1 operator, 2 function,
- * 3 aggregate, 4 aggregate whose partial state is a plain value.
- * Orca emits Arrow islands as CustomScans named ORCA_ARROW_ISLAND_NAME,
- * whose custom_private holds the island DXL and custom_plans its inputs.
+ * External execution engine. An extension that can run part of a plan
+ * itself (e.g. a vectorized engine) points orca_external_engine at one of
+ * these; Orca then also costs plans that run supported operators in that
+ * engine, with conversions at the engine boundaries. Each engine region is
+ * emitted as a CustomScan with the methods registered as custom_scan_name:
+ * custom_private holds a String with the region's DXL plan and custom_plans
+ * the PG subplans feeding it, in DXL pre-order.
  */
-typedef bool (*orca_arrow_capability_hook_type) (int kind, Oid oid);
-extern PGDLLIMPORT orca_arrow_capability_hook_type orca_arrow_capability_hook;
-#define ORCA_ARROW_ISLAND_NAME "Orca Arrow Island"
+typedef enum OrcaEngineAsk
+{
+	ORCA_ENGINE_ASK_TYPE,		/* values of this type can cross the boundary */
+	ORCA_ENGINE_ASK_OPERATOR,
+	ORCA_ENGINE_ASK_FUNCTION,
+	ORCA_ENGINE_ASK_AGG,		/* single-stage aggregate */
+	ORCA_ENGINE_ASK_AGG_SPLIT	/* aggregate whose partial state is a plain value */
+} OrcaEngineAsk;
+
+typedef enum OrcaEngineOp
+{
+	ORCA_ENGINE_OP_TO_ENGINE,	/* conversion from PG tuples */
+	ORCA_ENGINE_OP_TO_PG,		/* conversion back to PG tuples */
+	ORCA_ENGINE_OP_HASH_AGG,
+	ORCA_ENGINE_OP_HASH_JOIN,
+	ORCA_ENGINE_OP_COMPUTE_SCALAR,
+	ORCA_ENGINE_OP_FILTER
+} OrcaEngineOp;
+
+typedef struct OrcaEngineConfig
+{
+	uint32		ops;			/* bitmask of 1 << OrcaEngineOp; 0 disables */
+	double		min_rows;		/* skip joins/aggs whose inputs are all smaller */
+} OrcaEngineConfig;
+
+typedef struct OrcaExternalEngine
+{
+	const char *custom_scan_name;
+	/* Called once per optimization. */
+	void		(*configure) (OrcaEngineConfig *config);
+	bool		(*supports) (OrcaEngineAsk ask, Oid oid);
+	/*
+	 * Cost, in Orca units, of running op in the engine. pg_cost is Orca's
+	 * cost of the PG operator excluding its children (0 for conversions);
+	 * rows and width are its output per segment. Must not throw.
+	 */
+	double		(*cost) (OrcaEngineOp op, double pg_cost, double rows,
+						 double width);
+} OrcaExternalEngine;
+
+extern PGDLLIMPORT const OrcaExternalEngine *orca_external_engine;
 
 #endif
 

@@ -71,28 +71,31 @@ enum EArrowCapability
 	EacAggregateSplit  // aggregate oid whose partial state is a plain value
 };
 
+// mirrors OrcaEngineOp
+enum EArrowOp
+{
+	EaopToArrow = 0,
+	EaopToPG,
+	EaopHashAgg,
+	EaopHashJoin,
+	EaopComputeScalar,
+	EaopFilter
+};
+
 using FnArrowCapability = BOOL (*)(EArrowCapability kind, ULONG oid);
+using FnArrowCost = DOUBLE (*)(EArrowOp op, DOUBLE pg_cost, DOUBLE rows,
+							   DOUBLE width);
 
 // Set by the host (gpopt) before optimization. A null callback disables
 // Arrow alternatives entirely.
 struct SArrowEngineConfig
 {
 	FnArrowCapability m_capability{nullptr};
-	BOOL m_enabled{false};
-	// multiplier applied to an Arrow operator's local cost
-	DOUBLE m_cost_factor{0.5};
-	// per (row * byte) cost of a PG<->Arrow conversion
-	DOUBLE m_conversion_cost{1.0e-6};
-	// operator types that get an Arrow alternative (bitmask, see below)
-	ULONG m_operators{~0u};
-};
-
-enum EArrowOperatorMask
-{
-	EaomHashAgg = 1 << 0,
-	EaomHashJoin = 1 << 1,
-	EaomComputeScalar = 1 << 2,
-	EaomFilter = 1 << 3
+	FnArrowCost m_cost{nullptr};
+	// bitmask of 1 << EArrowOp; 0 disables the engine
+	ULONG m_operators{0};
+	// joins/aggs whose inputs are all smaller than this get no Arrow twin
+	DOUBLE m_min_rows{0};
 };
 
 extern SArrowEngineConfig g_arrow_engine;
@@ -100,7 +103,10 @@ extern SArrowEngineConfig g_arrow_engine;
 class CArrowEngineUtils
 {
 public:
-	static BOOL FEnabled(EArrowOperatorMask op);
+	static BOOL FEnabled(EArrowOp op);
+
+	// whether some relational child is big enough to be worth an engine switch
+	static BOOL FLargeEnough(CExpression *pexpr);
 
 	// whether every scalar node under the expression can run in Arrow
 	static BOOL FScalarSupported(CExpression *pexprScalar);

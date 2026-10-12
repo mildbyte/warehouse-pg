@@ -568,7 +568,8 @@ CTranslatorDXLToPlStmt::TranslateDXLArrowIsland(
 	}
 
 	const CustomScanMethods *methods =
-		gpdb::GetCustomScanMethods(ORCA_ARROW_ISLAND_NAME, true);
+		gpdb::GetCustomScanMethods(
+			orca_external_engine->custom_scan_name, true);
 	if (nullptr == methods)
 	{
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,

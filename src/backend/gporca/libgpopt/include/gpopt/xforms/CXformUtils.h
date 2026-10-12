@@ -652,7 +652,8 @@ CXformUtils::AddHashOrMergeJoinAlternative(
 	// so take references before the PG alternative may be released below.
 	BOOL fArrow =
 		COperator::EopPhysicalInnerHashJoin == op->Eopid() &&
-		!is_hash_join_null_aware && CArrowEngineUtils::FEnabled(EaomHashJoin) &&
+		!is_hash_join_null_aware && CArrowEngineUtils::FEnabled(EaopHashJoin) &&
+		CArrowEngineUtils::FLargeEnough(pexprJoin) &&
 		CArrowEngineUtils::FColsSupported((*pexprJoin)[2]->DeriveUsedColumns()) &&
 		CArrowEngineUtils::FScalarSupported((*pexprJoin)[2]);
 	if (fArrow)

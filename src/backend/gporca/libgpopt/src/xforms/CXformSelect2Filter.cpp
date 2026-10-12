@@ -99,7 +99,7 @@ CXformSelect2Filter::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	// add alternative to results
 	pxfres->Add(pexprFilter);
 
-	if (CArrowEngineUtils::FEnabled(EaomFilter) &&
+	if (CArrowEngineUtils::FEnabled(EaopFilter) &&
 		CArrowEngineUtils::FColsSupported(pexprScalar->DeriveUsedColumns()) &&
 		CArrowEngineUtils::FScalarSupported(pexprScalar))
 	{

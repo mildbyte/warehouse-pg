@@ -19,6 +19,7 @@
 #include "gpopt/search/CGroupExpression.h"
 #include "naucrates/md/CMDIdGPDB.h"
 #include "naucrates/md/IMDType.h"
+#include "naucrates/statistics/IStatistics.h"
 
 using namespace gpopt;
 using namespace gpmd;
@@ -37,10 +38,37 @@ FAsk(EArrowCapability kind, IMDId *mdid)
 }
 
 BOOL
-CArrowEngineUtils::FEnabled(EArrowOperatorMask op)
+CArrowEngineUtils::FEnabled(EArrowOp op)
 {
-	return g_arrow_engine.m_enabled && nullptr != g_arrow_engine.m_capability &&
-		   0 != (g_arrow_engine.m_operators & op);
+	return nullptr != g_arrow_engine.m_capability &&
+		   0 != (g_arrow_engine.m_operators & (1u << op));
+}
+
+BOOL
+CArrowEngineUtils::FLargeEnough(CExpression *pexpr)
+{
+	BOOL known = false;
+	for (ULONG ul = 0; ul < pexpr->Arity(); ul++)
+	{
+		CExpression *pexprChild = (*pexpr)[ul];
+		if (pexprChild->Pop()->FScalar())
+		{
+			continue;
+		}
+		CGroupExpression *pgexpr = pexprChild->Pgexpr();
+		const IStatistics *stats = nullptr != pgexpr ? pgexpr->Pgroup()->Pstats()
+											   : pexprChild->Pstats();
+		if (nullptr == stats)
+		{
+			return true;
+		}
+		known = true;
+		if (stats->Rows() >= g_arrow_engine.m_min_rows)
+		{
+			return true;
+		}
+	}
+	return !known;
 }
 
 BOOL

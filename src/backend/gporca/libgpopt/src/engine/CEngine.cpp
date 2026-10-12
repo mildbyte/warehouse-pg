@@ -2365,6 +2365,19 @@ CEngine::FCheckReqdProps(CExpressionHandle &exprhdl, CReqdPropPlan *prpp,
 		return false;
 	}
 
+	// Under an Arrow request a PG operator can only be the input of a
+	// ToArrow. Allowing only producers (scans, motions) there keeps every PG
+	// subtree from being optimized again for each Arrow context.
+	static const BOOL fLeavesOnly = nullptr == std::getenv("ORCA_ARROW_ANY_INPUT");
+	if (fLeavesOnly && EeeArrow == EeBase(prpp->Ee()) &&
+		EeePG == popPhysical->ExecEngine() &&
+		COperator::EopPhysicalEngineConvert != op_id &&
+		!CUtils::FPhysicalScan(popPhysical) &&
+		!CUtils::FPhysicalMotion(popPhysical))
+	{
+		return false;
+	}
+
 	// check if partition selector is passed a propagation spec not
 	// involving it's scan-id; this check is required to avoid self-
 	// deadlocks, i.e partition selector optimizing the same group

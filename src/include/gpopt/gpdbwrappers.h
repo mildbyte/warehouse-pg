@@ -38,6 +38,7 @@ using Relation = struct RelationData *;
 struct Value;
 using TupleDesc = struct TupleDescData *;
 struct Query;
+struct OrcaEngineConfig;
 using ScanKey = struct ScanKeyData *;
 struct Bitmapset;
 struct Plan;
@@ -680,7 +681,8 @@ PartitionKey GPDBRelationRetrievePartitionKey(Relation rel);
 bool TestexprIsHashable(Node *testexpr, List *param_ids);
 
 // ask the extension whether an oid can run in its Arrow engine
-bool ArrowCapability(int kind, Oid oid);
+void ExternalEngineConfigure(::OrcaEngineConfig *config);
+bool ExternalEngineSupports(int ask, Oid oid);
 
 const struct CustomScanMethods *GetCustomScanMethods(const char *name,
 													 bool missing_ok);

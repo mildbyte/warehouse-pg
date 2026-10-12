@@ -145,7 +145,8 @@ CXformGbAgg2HashAgg::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 
 	BOOL fDQA = nullptr != pdrgpcrArgDQA && 0 != pdrgpcrArgDQA->Size();
 	if (!fDQA && COperator::EgbaggtypeIntermediate != popAgg->Egbaggtype() &&
-		CArrowEngineUtils::FEnabled(EaomHashAgg) &&
+		CArrowEngineUtils::FEnabled(EaopHashAgg) &&
+		CArrowEngineUtils::FLargeEnough(pexpr) &&
 		CArrowEngineUtils::FColsSupported(pexpr->DeriveOutputColumns()) &&
 		CArrowEngineUtils::FScalarSupported(pexprScalar))
 	{

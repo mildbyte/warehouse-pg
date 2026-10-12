@@ -2774,15 +2774,25 @@ gpdb::TestexprIsHashable(Node *testexpr, List *param_ids)
 }
 
 bool
-gpdb::ArrowCapability(int kind, Oid oid)
+gpdb::ExternalEngineSupports(int ask, Oid oid)
 {
 	GP_WRAP_START;
 	{
-		return nullptr != orca_arrow_capability_hook &&
-			   orca_arrow_capability_hook(kind, oid);
+		return orca_external_engine->supports((OrcaEngineAsk) ask, oid);
 	}
 	GP_WRAP_END;
 	return false;
+}
+
+void
+gpdb::ExternalEngineConfigure(::OrcaEngineConfig *config)
+{
+	GP_WRAP_START;
+	{
+		orca_external_engine->configure(config);
+		return;
+	}
+	GP_WRAP_END;
 }
 
 const struct CustomScanMethods *

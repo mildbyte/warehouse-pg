@@ -18,6 +18,7 @@
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/base/COrderSpec.h"
 #include "gpopt/base/CExecEngine.h"
+#include "gpopt/operators/CPhysicalEngineConvert.h"
 #include "gpopt/base/CWindowFrame.h"
 #include "gpopt/engine/CHint.h"
 #include "gpopt/metadata/CIndexDescriptor.h"
@@ -2406,10 +2407,13 @@ CCostModelGPDB::Cost(
 	COperator::EOperatorId op_id = exprhdl.Pop()->Eopid();
 	if (COperator::EopPhysicalEngineConvert == op_id)
 	{
-		// per-byte conversion, plus the child
-		DOUBLE local = pci->NumRebinds() * pci->Rows() *
-					   std::max(pci->Width(), 1.0) *
-					   g_arrow_engine.m_conversion_cost;
+		EArrowOp op =
+			EeeArrow == CPhysicalEngineConvert::PopConvert(exprhdl.Pop())
+							->EeTarget()
+				? EaopToArrow
+				: EaopToPG;
+		DOUBLE local = pci->NumRebinds() *
+					   g_arrow_engine.m_cost(op, 0.0, pci->Rows(), pci->Width());
 		return CCost(local) +
 			   CostChildren(m_mp, exprhdl, pci, m_cost_model_params);
 	}
@@ -2417,10 +2421,26 @@ CCostModelGPDB::Cost(
 	CPhysical *popPhysical = CPhysical::PopConvert(exprhdl.Pop());
 	if (EeeArrow == popPhysical->ExecEngine())
 	{
+		EArrowOp op;
+		switch (op_id)
+		{
+			case COperator::EopPhysicalInnerHashJoin:
+				op = EaopHashJoin;
+				break;
+			case COperator::EopPhysicalComputeScalar:
+				op = EaopComputeScalar;
+				break;
+			case COperator::EopPhysicalFilter:
+				op = EaopFilter;
+				break;
+			default:
+				op = EaopHashAgg;
+		}
 		CCost total = CostPG(exprhdl, pci);
 		CCost children = CostChildren(m_mp, exprhdl, pci, m_cost_model_params);
 		DOUBLE local = std::max(total.Get() - children.Get(), 0.0);
-		return children + CCost(local * g_arrow_engine.m_cost_factor);
+		return children + CCost(g_arrow_engine.m_cost(op, local, pci->Rows(),
+													  pci->Width()));
 	}
 	return CostPG(exprhdl, pci);
 }

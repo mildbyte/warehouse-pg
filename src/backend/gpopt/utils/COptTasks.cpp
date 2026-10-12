@@ -90,12 +90,18 @@ using namespace gpdbcost;
 const CSystemId default_sysid(IMDId::EmdidGeneral, GPOS_WSZ_STR_LENGTH("GPDB"));
 
 plan_hint_hook_type plan_hint_hook = nullptr;
-orca_arrow_capability_hook_type orca_arrow_capability_hook = nullptr;
+const OrcaExternalEngine *orca_external_engine = nullptr;
 
 static BOOL
 ArrowCapability(EArrowCapability kind, ULONG oid)
 {
-	return gpdb::ArrowCapability((int) kind, (Oid) oid);
+	return gpdb::ExternalEngineSupports((int) kind, (Oid) oid);
+}
+
+static DOUBLE
+ArrowCost(EArrowOp op, DOUBLE pg_cost, DOUBLE rows, DOUBLE width)
+{
+	return orca_external_engine->cost((OrcaEngineOp) op, pg_cost, rows, width);
 }
 
 // Check one-to-one mapping of row hint types
@@ -913,12 +919,20 @@ COptTasks::OptimizeTask(void *ptr)
 		SetTraceflags(mp, trace_flags, &enabled_trace_flags,
 					  &disabled_trace_flags);
 
-		g_arrow_engine.m_enabled = optimizer_enable_arrow_engine &&
-								   nullptr != orca_arrow_capability_hook;
-		g_arrow_engine.m_capability = ArrowCapability;
-		g_arrow_engine.m_cost_factor = optimizer_arrow_cost_factor;
-		g_arrow_engine.m_conversion_cost = optimizer_arrow_conversion_cost;
-		g_arrow_engine.m_operators = (ULONG) optimizer_arrow_operators;
+		g_arrow_engine.m_capability = nullptr;
+		g_arrow_engine.m_operators = 0;
+		if (nullptr != orca_external_engine)
+		{
+			OrcaEngineConfig config = {0, 0.0};
+			gpdb::ExternalEngineConfigure(&config);
+			g_arrow_engine.m_operators = config.ops;
+			g_arrow_engine.m_min_rows = config.min_rows;
+		}
+		if (0 != g_arrow_engine.m_operators)
+		{
+			g_arrow_engine.m_capability = ArrowCapability;
+			g_arrow_engine.m_cost = ArrowCost;
+		}
 
 		// set up relcache MD provider
 		CMDProviderRelcache *relcache_provider =

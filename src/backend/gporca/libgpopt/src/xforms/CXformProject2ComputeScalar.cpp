@@ -79,7 +79,7 @@ CXformProject2ComputeScalar::Transform(CXformContext *pxfctxt,
 	// add alternative to results
 	pxfres->Add(pexprComputeScalar);
 
-	if (CArrowEngineUtils::FEnabled(EaomComputeScalar) &&
+	if (CArrowEngineUtils::FEnabled(EaopComputeScalar) &&
 		CArrowEngineUtils::FColsSupported(pexprScalar->DeriveUsedColumns()) &&
 		CArrowEngineUtils::FColsSupported(pexprScalar->DeriveDefinedColumns()) &&
 		CArrowEngineUtils::FScalarSupported(pexprScalar))
