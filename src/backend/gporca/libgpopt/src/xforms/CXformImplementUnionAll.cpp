@@ -11,6 +11,8 @@
 
 #include "gpopt/xforms/CXformImplementUnionAll.h"
 
+#include "gpopt/base/CExecEngine.h"
+
 #include "gpos/base.h"
 
 #include "gpopt/exception.h"
@@ -80,6 +82,16 @@ CXformImplementUnionAll::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 
 	// add serial union alternative to results
 	pxfres->Add(pexprSerialUnionAll);
+
+	CColRefSet *pcrsOutput = pexpr->DeriveOutputColumns();
+	if (CArrowEngineUtils::FEnabled(EaopComputeScalar) &&
+		CArrowEngineUtils::FColsSupported(pcrsOutput))
+	{
+		CPhysicalUnionAll *popArrow = factory.PopPhysicalUnionAll(mp, false);
+		popArrow->SetExecEngine(EeeArrow);
+		pdrgpexpr->AddRef();
+		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popArrow, pdrgpexpr));
+	}
 
 	// parallel union alternative to the result if the GUC is on
 	BOOL fParallel = GPOS_FTRACE(EopttraceEnableParallelAppend);

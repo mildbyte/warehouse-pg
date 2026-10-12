@@ -114,7 +114,7 @@ CXformGbAgg2ScalarAgg::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	pxfres->Add(pexprAlt);
 
 	BOOL fDQA = nullptr != pdrgpcrArgDQA && 0 != pdrgpcrArgDQA->Size();
-	if (!fDQA && COperator::EgbaggtypeIntermediate != popAgg->Egbaggtype() &&
+	if (COperator::EgbaggtypeIntermediate != popAgg->Egbaggtype() &&
 		CArrowEngineUtils::FEnabled(EaopHashAgg) &&
 		CArrowEngineUtils::FLargeEnough(pexpr) &&
 		CArrowEngineUtils::FColsSupported(pexpr->DeriveOutputColumns()) &&
@@ -123,9 +123,13 @@ CXformGbAgg2ScalarAgg::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 		colref_array->AddRef();
 		pexprRel->AddRef();
 		pexprScalar->AddRef();
+		if (fDQA)
+		{
+			pdrgpcrArgDQA->AddRef();
+		}
 		CPhysicalScalarAgg *popArrow = GPOS_NEW(mp) CPhysicalScalarAgg(
 			mp, colref_array, popAgg->PdrgpcrMinimal(), popAgg->Egbaggtype(),
-			popAgg->FGeneratesDuplicates(), nullptr /*pdrgpcrArgDQA*/,
+			popAgg->FGeneratesDuplicates(), fDQA ? pdrgpcrArgDQA : nullptr,
 			CXformUtils::FMultiStageAgg(pexpr),
 			CXformUtils::FAggGenBySplitDQAXform(pexpr), popAgg->AggStage(),
 			!CXformUtils::FLocalAggCreatedByEagerAggXform(pexpr));

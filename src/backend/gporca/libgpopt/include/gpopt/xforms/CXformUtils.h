@@ -613,6 +613,25 @@ CXformUtils::TransformImplementBinaryOp(CXformContext *pxfctxt,
 				COperator::EopPhysicalLeftAntiSemiNLJoin == op_id ||
 				COperator::EopPhysicalLeftAntiSemiNLJoinNotIn == op_id);
 
+	// Arrow twin: DataFusion collects the inner side once, so neither
+	// correlated inner sides nor NOT IN semantics are expressible
+	COperator::EOperatorId eopidNL = pexprBinary->Pop()->Eopid();
+	if (COperator::EopPhysicalLeftAntiSemiNLJoinNotIn != eopidNL &&
+		!CUtils::HasOuterRefs(pexprRight) &&
+		CArrowEngineUtils::FEnabled(EaopHashJoin) &&
+		CArrowEngineUtils::FLargeEnough(pexpr) &&
+		CArrowEngineUtils::FColsSupported(pexprScalar->DeriveUsedColumns()) &&
+		CArrowEngineUtils::FScalarSupported(pexprScalar))
+	{
+		pexprLeft->AddRef();
+		pexprRight->AddRef();
+		pexprScalar->AddRef();
+		T *popArrow = GPOS_NEW(mp) T(mp);
+		popArrow->SetExecEngine(EeeArrow);
+		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popArrow, pexprLeft,
+											 pexprRight, pexprScalar));
+	}
+
 	if (!CHintUtils::SatisfiesJoinTypeHints(
 			mp, pexprBinary,
 			COptCtxt::PoctxtFromTLS()->GetOptimizerConfig()->GetPlanHint()))
@@ -648,8 +667,8 @@ CXformUtils::AddHashOrMergeJoinAlternative(
 		GPOS_NEW(mp) T(mp, pdrgpexprOuter, pdrgpexprInner, opfamilies,
 					   is_hash_join_null_aware, popLogicalJoin->OriginXform());
 
-	// Arrow twin for inner, outer, semi and anti hash joins (not the
-	// null-aware NOT IN form). The key arrays are shared, so take references
+	// Arrow twin for every hash join type; DataFusion's null-aware anti
+	// join takes a single key. The key arrays are shared, so take references
 	// before the PG alternative may be released below.
 	COperator::EOperatorId eopidJoin = op->Eopid();
 	BOOL fArrow =
@@ -657,8 +676,11 @@ CXformUtils::AddHashOrMergeJoinAlternative(
 		 COperator::EopPhysicalLeftOuterHashJoin == eopidJoin ||
 		 COperator::EopPhysicalRightOuterHashJoin == eopidJoin ||
 		 COperator::EopPhysicalLeftSemiHashJoin == eopidJoin ||
-		 COperator::EopPhysicalLeftAntiSemiHashJoin == eopidJoin) &&
-		!is_hash_join_null_aware && CArrowEngineUtils::FEnabled(EaopHashJoin) &&
+		 COperator::EopPhysicalLeftAntiSemiHashJoin == eopidJoin ||
+		 COperator::EopPhysicalFullHashJoin == eopidJoin ||
+		 (COperator::EopPhysicalLeftAntiSemiHashJoinNotIn == eopidJoin &&
+		  1 == pdrgpexprOuter->Size())) &&
+		CArrowEngineUtils::FEnabled(EaopHashJoin) &&
 		CArrowEngineUtils::FLargeEnough(pexprJoin) &&
 		CArrowEngineUtils::FColsSupported((*pexprJoin)[2]->DeriveUsedColumns()) &&
 		CArrowEngineUtils::FScalarSupported((*pexprJoin)[2]);

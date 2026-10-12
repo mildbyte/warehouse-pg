@@ -11,6 +11,8 @@
 
 #include "gpopt/base/COrderSpec.h"
 
+#include "gpopt/base/CExecEngine.h"
+
 #include "gpopt/base/CColRefSet.h"
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/operators/CPhysicalSort.h"
@@ -215,6 +217,15 @@ COrderSpec::AppendEnforcers(CMemoryPool *mp,
 	CExpression *pexprSort = GPOS_NEW(mp)
 		CExpression(mp, GPOS_NEW(mp) CPhysicalSort(mp, this), pexpr);
 	pdrgpexpr->Append(pexprSort);
+
+	if (CArrowEngineUtils::FOrderSupported(this))
+	{
+		AddRef();
+		pexpr->AddRef();
+		CPhysicalSort *popArrow = GPOS_NEW(mp) CPhysicalSort(mp, this);
+		popArrow->SetExecEngine(EeeArrow);
+		pdrgpexpr->Append(GPOS_NEW(mp) CExpression(mp, popArrow, pexpr));
+	}
 }
 
 

@@ -70,6 +70,17 @@ public:
 	CEnfdProp::EPropEnforcingType EpetOrder(
 		CExpressionHandle &exprhdl, const CEnfdOrder *peo) const override;
 
+	// the Arrow form emits matches build row by build row
+	COrderSpec *
+	PosDerive(CMemoryPool *mp, CExpressionHandle &exprhdl) const override
+	{
+		if (EeeArrow == ExecEngine())
+		{
+			return GPOS_NEW(mp) COrderSpec(mp);
+		}
+		return PosDerivePassThruOuter(exprhdl);
+	}
+
 	//-------------------------------------------------------------------------------------
 	//-------------------------------------------------------------------------------------
 	//-------------------------------------------------------------------------------------

@@ -4,6 +4,8 @@
 
 #include "gpopt/base/CExecEngine.h"
 
+#include "gpopt/base/COrderSpec.h"
+
 #include "gpopt/base/CColRef.h"
 #include "gpopt/base/CColRefSet.h"
 #include "gpopt/base/CColRefSetIter.h"
@@ -99,6 +101,24 @@ CArrowEngineUtils::FColsSupported(CColRefSet *pcrs)
 	while (it.Advance())
 	{
 		if (!FAsk(EacType, it.Pcr()->RetrieveType()->MDId()))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+BOOL
+CArrowEngineUtils::FOrderSupported(COrderSpec *pos)
+{
+	if (!FEnabled(EaopSort) || pos->IsEmpty())
+	{
+		return false;
+	}
+	for (ULONG ul = 0; ul < pos->UlSortColumns(); ul++)
+	{
+		if (!FAsk(EacType, pos->Pcr(ul)->RetrieveType()->MDId()) ||
+			!FAsk(EacOperator, pos->GetMdIdSortOp(ul)))
 		{
 			return false;
 		}
@@ -235,16 +255,18 @@ CArrowEngineUtils::FScalarSupported(CExpression *pexpr)
 		case COperator::EopScalarAggFunc:
 		{
 			CScalarAggFunc *popAgg = CScalarAggFunc::PopConvert(pop);
-			if (popAgg->IsDistinct() ||
+			// a DISTINCT aggregate has no partial state
+			if ((popAgg->IsDistinct() && popAgg->FSplit()) ||
 				EaggfunckindNormal != popAgg->AggKind() ||
 				EaggfuncstageIntermediate == popAgg->Eaggfuncstage())
 			{
 				return false;
 			}
-			// direct args, ORDER BY and DISTINCT lists must be empty
+			// direct args and ORDER BY must be empty; the DISTINCT list is the
+			// argument list itself
 			for (ULONG ul = EaggfuncIndexDirectArgs; ul < pexpr->Arity(); ul++)
 			{
-				if (0 != (*pexpr)[ul]->Arity())
+				if (EaggfuncIndexDistinct != ul && 0 != (*pexpr)[ul]->Arity())
 				{
 					return false;
 				}

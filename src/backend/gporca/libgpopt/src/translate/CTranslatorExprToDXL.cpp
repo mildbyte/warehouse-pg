@@ -2652,6 +2652,16 @@ CTranslatorExprToDXL::PdxlnRemapOutputColumns(CExpression *pexpr,
 	CDXLNode *pdxlnPrLNew = PdxlnProjList(pcrsOutput, pdrgpcrOrder);
 	pcrsOutput->Release();
 
+	// a ToPG emits whatever columns its project list names, so reorder that
+	// rather than add a Result on top of the island
+	if (EdxlopPhysicalEngineConvert ==
+			dxlnode->GetOperator()->GetDXLOperator() &&
+		!CDXLPhysicalEngineConvert::Cast(dxlnode->GetOperator())->IsToArrow())
+	{
+		dxlnode->ReplaceChild(0, pdxlnPrLNew);
+		return dxlnode;
+	}
+
 	// create a result node on top of the current dxl node with a new project list
 	return PdxlnResult(GetProperties(pexpr), pdxlnPrLNew, dxlnode);
 }

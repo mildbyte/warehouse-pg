@@ -2429,7 +2429,17 @@ CCostModelGPDB::Cost(
 			case COperator::EopPhysicalRightOuterHashJoin:
 			case COperator::EopPhysicalLeftSemiHashJoin:
 			case COperator::EopPhysicalLeftAntiSemiHashJoin:
+			case COperator::EopPhysicalLeftAntiSemiHashJoinNotIn:
+			case COperator::EopPhysicalFullHashJoin:
+			case COperator::EopPhysicalInnerNLJoin:
+			case COperator::EopPhysicalLeftOuterNLJoin:
+			case COperator::EopPhysicalLeftSemiNLJoin:
+			case COperator::EopPhysicalLeftAntiSemiNLJoin:
 				op = EaopHashJoin;
+				break;
+			case COperator::EopPhysicalSort:
+			case COperator::EopPhysicalLimit:
+				op = EaopSort;
 				break;
 			case COperator::EopPhysicalComputeScalar:
 				op = EaopComputeScalar;

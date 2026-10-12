@@ -104,47 +104,46 @@ CXformGbAgg2HashAgg::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	// hash agg is not used if agg function does not have prelim func
 	// hash agg is not used for ordered aggregate
 	// evaluating these conditions needs a deep tree in the project list
-	if (!FApplicable(pexpr))
-	{
-		return;
-	}
+	// (DataFusion's hash aggregate does evaluate DISTINCT aggregates, so the
+	// Arrow alternative below is still offered)
+	BOOL fPG = FApplicable(pexpr);
 
 	CMemoryPool *mp = pxfctxt->Pmp();
 	CLogicalGbAgg *popAgg = CLogicalGbAgg::PopConvert(pexpr->Pop());
 	CColRefArray *colref_array = popAgg->Pdrgpcr();
-	colref_array->AddRef();
 
 	// extract components
 	CExpression *pexprRel = (*pexpr)[0];
 	CExpression *pexprScalar = (*pexpr)[1];
 
-	// addref children
-	pexprRel->AddRef();
-	pexprScalar->AddRef();
-
 	CColRefArray *pdrgpcrArgDQA = popAgg->PdrgpcrArgDQA();
-	if (pdrgpcrArgDQA != nullptr && 0 != pdrgpcrArgDQA->Size())
+	if (fPG)
 	{
-		GPOS_ASSERT(nullptr != pdrgpcrArgDQA);
-		pdrgpcrArgDQA->AddRef();
+		colref_array->AddRef();
+		pexprRel->AddRef();
+		pexprScalar->AddRef();
+		if (pdrgpcrArgDQA != nullptr && 0 != pdrgpcrArgDQA->Size())
+		{
+			pdrgpcrArgDQA->AddRef();
+		}
+
+		// create alternative expression
+		CExpression *pexprAlt = GPOS_NEW(mp) CExpression(
+			mp,
+			GPOS_NEW(mp) CPhysicalHashAgg(
+				mp, colref_array, popAgg->PdrgpcrMinimal(),
+				popAgg->Egbaggtype(), popAgg->FGeneratesDuplicates(),
+				pdrgpcrArgDQA, CXformUtils::FMultiStageAgg(pexpr),
+				CXformUtils::FAggGenBySplitDQAXform(pexpr), popAgg->AggStage(),
+				!CXformUtils::FLocalAggCreatedByEagerAggXform(pexpr)),
+			pexprRel, pexprScalar);
+
+		// add alternative to transformation result
+		pxfres->Add(pexprAlt);
 	}
 
-	// create alternative expression
-	CExpression *pexprAlt = GPOS_NEW(mp) CExpression(
-		mp,
-		GPOS_NEW(mp) CPhysicalHashAgg(
-			mp, colref_array, popAgg->PdrgpcrMinimal(), popAgg->Egbaggtype(),
-			popAgg->FGeneratesDuplicates(), pdrgpcrArgDQA,
-			CXformUtils::FMultiStageAgg(pexpr),
-			CXformUtils::FAggGenBySplitDQAXform(pexpr), popAgg->AggStage(),
-			!CXformUtils::FLocalAggCreatedByEagerAggXform(pexpr)),
-		pexprRel, pexprScalar);
-
-	// add alternative to transformation result
-	pxfres->Add(pexprAlt);
-
 	BOOL fDQA = nullptr != pdrgpcrArgDQA && 0 != pdrgpcrArgDQA->Size();
-	if (!fDQA && COperator::EgbaggtypeIntermediate != popAgg->Egbaggtype() &&
+	if (COperator::EgbaggtypeIntermediate != popAgg->Egbaggtype() &&
 		CArrowEngineUtils::FEnabled(EaopHashAgg) &&
 		CArrowEngineUtils::FLargeEnough(pexpr) &&
 		CArrowEngineUtils::FColsSupported(pexpr->DeriveOutputColumns()) &&
@@ -153,9 +152,13 @@ CXformGbAgg2HashAgg::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 		colref_array->AddRef();
 		pexprRel->AddRef();
 		pexprScalar->AddRef();
+		if (fDQA)
+		{
+			pdrgpcrArgDQA->AddRef();
+		}
 		CPhysicalHashAgg *popArrow = GPOS_NEW(mp) CPhysicalHashAgg(
 			mp, colref_array, popAgg->PdrgpcrMinimal(), popAgg->Egbaggtype(),
-			popAgg->FGeneratesDuplicates(), nullptr /*pdrgpcrArgDQA*/,
+			popAgg->FGeneratesDuplicates(), fDQA ? pdrgpcrArgDQA : nullptr,
 			CXformUtils::FMultiStageAgg(pexpr),
 			CXformUtils::FAggGenBySplitDQAXform(pexpr), popAgg->AggStage(),
 			!CXformUtils::FLocalAggCreatedByEagerAggXform(pexpr));

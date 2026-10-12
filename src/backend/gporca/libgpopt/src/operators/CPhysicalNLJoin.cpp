@@ -76,7 +76,7 @@ CPhysicalNLJoin::PosRequired(CMemoryPool *mp, CExpressionHandle &exprhdl,
 		child_index < 2 &&
 		"Required sort order can be computed on the relational child only");
 
-	if (0 == child_index)
+	if (0 == child_index && EeeArrow != ExecEngine())
 	{
 		return PosPropagateToOuter(mp, exprhdl, posInput);
 	}
@@ -103,6 +103,13 @@ CPhysicalNLJoin::PrsRequired(CMemoryPool *mp, CExpressionHandle &exprhdl,
 	GPOS_ASSERT(
 		child_index < 2 &&
 		"Required rewindability can be computed on the relational child only");
+
+	// the Arrow form collects its inner child once, like a hash join
+	if (1 == child_index && EeeArrow == ExecEngine())
+	{
+		return GPOS_NEW(mp)
+			CRewindabilitySpec(CRewindabilitySpec::ErtNone, prsRequired->Emht());
+	}
 
 	// inner child has to be rewindable
 	if (1 == child_index)
@@ -194,7 +201,8 @@ CPhysicalNLJoin::EpetOrder(CExpressionHandle &exprhdl,
 	GPOS_ASSERT(nullptr != peo);
 	GPOS_ASSERT(!peo->PosRequired()->IsEmpty());
 
-	if (FSortColsInOuterChild(m_mp, exprhdl, peo->PosRequired()))
+	if (EeeArrow != ExecEngine() &&
+		FSortColsInOuterChild(m_mp, exprhdl, peo->PosRequired()))
 	{
 		return CEnfdProp::EpetOptional;
 	}

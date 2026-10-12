@@ -79,7 +79,8 @@ enum EArrowOp
 	EaopHashAgg,
 	EaopHashJoin,
 	EaopComputeScalar,
-	EaopFilter
+	EaopFilter,
+	EaopSort  // sort enforcers and limits
 };
 
 using FnArrowCapability = BOOL (*)(EArrowCapability kind, ULONG oid);
@@ -100,6 +101,8 @@ struct SArrowEngineConfig
 
 extern SArrowEngineConfig g_arrow_engine;
 
+class COrderSpec;
+
 class CArrowEngineUtils
 {
 public:
@@ -113,6 +116,9 @@ public:
 
 	// whether every column's type can cross the PG/Arrow boundary
 	static BOOL FColsSupported(CColRefSet *pcrs);
+
+	// whether a sort on the given keys can run in Arrow
+	static BOOL FOrderSupported(COrderSpec *pos);
 };
 
 }  // namespace gpopt

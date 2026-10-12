@@ -175,7 +175,8 @@ CPhysicalUnionAll::Matches(COperator *pop) const
 	{
 		CPhysicalUnionAll *popUnionAll = CPhysicalUnionAll::PopConvert(pop);
 
-		return PdrgpcrOutput()->Equals(popUnionAll->PdrgpcrOutput());
+		return popUnionAll->ExecEngine() == ExecEngine() &&
+			   PdrgpcrOutput()->Equals(popUnionAll->PdrgpcrOutput());
 	}
 
 	return false;
