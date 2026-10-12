@@ -2365,6 +2365,12 @@ CEngine::FCheckReqdProps(CExpressionHandle &exprhdl, CReqdPropPlan *prpp,
 		return false;
 	}
 
+	if (FEeNative(prpp->Ee()) &&
+		COperator::EopPhysicalEngineConvert == op_id)
+	{
+		return false;
+	}
+
 	// Under an Arrow request a PG operator can only be the input of a
 	// ToArrow. Allowing only producers (scans, motions) there keeps every PG
 	// subtree from being optimized again for each Arrow context.

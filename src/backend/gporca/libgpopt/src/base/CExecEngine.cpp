@@ -9,6 +9,10 @@
 #include "gpopt/base/CColRefSetIter.h"
 #include "gpopt/operators/CExpression.h"
 #include "gpopt/operators/CScalarAggFunc.h"
+#include "gpopt/operators/CScalarArrayCmp.h"
+#include "gpopt/operators/CScalarCoalesce.h"
+#include "gpopt/operators/CScalarIf.h"
+#include "gpopt/operators/CScalarIsDistinctFrom.h"
 #include "gpopt/operators/CScalarCast.h"
 #include "gpopt/operators/CScalarCmp.h"
 #include "gpopt/operators/CScalarConst.h"
@@ -21,8 +25,19 @@
 #include "naucrates/md/IMDType.h"
 #include "naucrates/statistics/IStatistics.h"
 
+#include <cstdio>
+#include <cstdlib>
+
 using namespace gpopt;
 using namespace gpmd;
+
+// prototype: ORCA_ARROW_GAPS=1 logs every refusal to the server log
+static BOOL
+FGapTrace()
+{
+	static const BOOL f = nullptr != std::getenv("ORCA_ARROW_GAPS");
+	return f;
+}
 
 SArrowEngineConfig gpopt::g_arrow_engine;
 
@@ -33,8 +48,14 @@ FAsk(EArrowCapability kind, IMDId *mdid)
 	{
 		return false;
 	}
-	return g_arrow_engine.m_capability(kind,
-									   CMDIdGPDB::CastMdid(mdid)->Oid());
+	BOOL ok = g_arrow_engine.m_capability(kind,
+										  CMDIdGPDB::CastMdid(mdid)->Oid());
+	if (!ok && FGapTrace())
+	{
+		fprintf(stderr, "ARROW_GAP ask %d %u\n", (int) kind,
+				CMDIdGPDB::CastMdid(mdid)->Oid());
+	}
+	return ok;
 }
 
 BOOL
@@ -122,6 +143,56 @@ CArrowEngineUtils::FScalarSupported(CExpression *pexpr)
 		case COperator::EopScalarConst:
 			return FAsk(EacType, CScalarConst::PopConvert(pop)->MdidType());
 
+		case COperator::EopScalarIf:
+			if (!FAsk(EacType, CScalarIf::PopConvert(pop)->MdidType()))
+			{
+				return false;
+			}
+			break;
+
+		case COperator::EopScalarCoalesce:
+			if (!FAsk(EacType, CScalarCoalesce::PopConvert(pop)->MdidType()))
+			{
+				return false;
+			}
+			break;
+
+		case COperator::EopScalarIsDistinctFrom:
+			if (!FAsk(EacOperator,
+					  CScalarIsDistinctFrom::PopConvert(pop)->MdIdOp()))
+			{
+				return false;
+			}
+			break;
+
+		// x op ANY/ALL (literal list); arrays themselves never cross
+		case COperator::EopScalarArrayCmp:
+		{
+			if (!FAsk(EacOperator, CScalarArrayCmp::PopConvert(pop)->MdIdOp()))
+			{
+				return false;
+			}
+			CExpression *pexprArray = (*pexpr)[1];
+			if (COperator::EopScalarArray != pexprArray->Pop()->Eopid())
+			{
+				if (FGapTrace())
+				{
+					fprintf(stderr, "ARROW_GAP op CScalarArrayCmp(non-literal)\n");
+				}
+				return false;
+			}
+			for (ULONG ul = 0; ul < pexprArray->Arity(); ul++)
+			{
+				CExpression *pexprElem = (*pexprArray)[ul];
+				if (COperator::EopScalarConst != pexprElem->Pop()->Eopid() ||
+					!FScalarSupported(pexprElem))
+				{
+					return false;
+				}
+			}
+			return FScalarSupported((*pexpr)[0]);
+		}
+
 		case COperator::EopScalarCmp:
 			if (!FAsk(EacOperator, CScalarCmp::PopConvert(pop)->MdIdOp()))
 			{
@@ -189,6 +260,10 @@ CArrowEngineUtils::FScalarSupported(CExpression *pexpr)
 		}
 
 		default:
+			if (FGapTrace())
+			{
+				fprintf(stderr, "ARROW_GAP op %s\n", pop->SzId());
+			}
 			return false;
 	}
 

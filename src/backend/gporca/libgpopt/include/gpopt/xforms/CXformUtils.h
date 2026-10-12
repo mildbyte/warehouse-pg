@@ -648,10 +648,16 @@ CXformUtils::AddHashOrMergeJoinAlternative(
 		GPOS_NEW(mp) T(mp, pdrgpexprOuter, pdrgpexprInner, opfamilies,
 					   is_hash_join_null_aware, popLogicalJoin->OriginXform());
 
-	// Arrow twin; only plain inner joins for now. The key arrays are shared,
-	// so take references before the PG alternative may be released below.
+	// Arrow twin for inner, outer, semi and anti hash joins (not the
+	// null-aware NOT IN form). The key arrays are shared, so take references
+	// before the PG alternative may be released below.
+	COperator::EOperatorId eopidJoin = op->Eopid();
 	BOOL fArrow =
-		COperator::EopPhysicalInnerHashJoin == op->Eopid() &&
+		(COperator::EopPhysicalInnerHashJoin == eopidJoin ||
+		 COperator::EopPhysicalLeftOuterHashJoin == eopidJoin ||
+		 COperator::EopPhysicalRightOuterHashJoin == eopidJoin ||
+		 COperator::EopPhysicalLeftSemiHashJoin == eopidJoin ||
+		 COperator::EopPhysicalLeftAntiSemiHashJoin == eopidJoin) &&
 		!is_hash_join_null_aware && CArrowEngineUtils::FEnabled(EaopHashJoin) &&
 		CArrowEngineUtils::FLargeEnough(pexprJoin) &&
 		CArrowEngineUtils::FColsSupported((*pexprJoin)[2]->DeriveUsedColumns()) &&

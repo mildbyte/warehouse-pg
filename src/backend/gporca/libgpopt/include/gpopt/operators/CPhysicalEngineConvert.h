@@ -106,9 +106,12 @@ public:
 	EExecEngine
 	EeRequired(CExpressionHandle &, ULONG) const override
 	{
-		// ToPG's child must be natively Arrow, which already stops ToArrow and
-		// ToPG from requesting each other forever; ToArrow can take any PG plan.
-		return EeeArrow == m_target ? EeePG : EeeArrowNative;
+		// Each side's child must be native to it: no enforcer on top, and (see
+		// CEngine::FCheckReqdProps) no opposite EngineConvert either. That
+		// stops ToArrow and ToPG requesting each other forever, and rules out
+		// a ToArrow straight over a ToPG, which only converts twice. A Motion
+		// between them stays possible: it is a PG operator.
+		return EeeArrow == m_target ? EeePGNative : EeeArrowNative;
 	}
 
 	EExecEngine

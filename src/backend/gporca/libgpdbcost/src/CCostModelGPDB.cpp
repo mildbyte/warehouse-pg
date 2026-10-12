@@ -2425,6 +2425,10 @@ CCostModelGPDB::Cost(
 		switch (op_id)
 		{
 			case COperator::EopPhysicalInnerHashJoin:
+			case COperator::EopPhysicalLeftOuterHashJoin:
+			case COperator::EopPhysicalRightOuterHashJoin:
+			case COperator::EopPhysicalLeftSemiHashJoin:
+			case COperator::EopPhysicalLeftAntiSemiHashJoin:
 				op = EaopHashJoin;
 				break;
 			case COperator::EopPhysicalComputeScalar:

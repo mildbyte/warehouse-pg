@@ -112,6 +112,27 @@ CXformGbAgg2ScalarAgg::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 
 	// add alternative to transformation result
 	pxfres->Add(pexprAlt);
+
+	BOOL fDQA = nullptr != pdrgpcrArgDQA && 0 != pdrgpcrArgDQA->Size();
+	if (!fDQA && COperator::EgbaggtypeIntermediate != popAgg->Egbaggtype() &&
+		CArrowEngineUtils::FEnabled(EaopHashAgg) &&
+		CArrowEngineUtils::FLargeEnough(pexpr) &&
+		CArrowEngineUtils::FColsSupported(pexpr->DeriveOutputColumns()) &&
+		CArrowEngineUtils::FScalarSupported(pexprScalar))
+	{
+		colref_array->AddRef();
+		pexprRel->AddRef();
+		pexprScalar->AddRef();
+		CPhysicalScalarAgg *popArrow = GPOS_NEW(mp) CPhysicalScalarAgg(
+			mp, colref_array, popAgg->PdrgpcrMinimal(), popAgg->Egbaggtype(),
+			popAgg->FGeneratesDuplicates(), nullptr /*pdrgpcrArgDQA*/,
+			CXformUtils::FMultiStageAgg(pexpr),
+			CXformUtils::FAggGenBySplitDQAXform(pexpr), popAgg->AggStage(),
+			!CXformUtils::FLocalAggCreatedByEagerAggXform(pexpr));
+		popArrow->SetExecEngine(EeeArrow);
+		pxfres->Add(GPOS_NEW(mp)
+						CExpression(mp, popArrow, pexprRel, pexprScalar));
+	}
 }
 
 
