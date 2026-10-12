@@ -44,13 +44,15 @@ using namespace gpopt;
 //---------------------------------------------------------------------------
 CReqdPropPlan::CReqdPropPlan(CColRefSet *pcrs, CEnfdOrder *peo,
 							 CEnfdDistribution *ped, CEnfdRewindability *per,
-							 CEnfdPartitionPropagation *pepp, CCTEReq *pcter)
+							 CEnfdPartitionPropagation *pepp, CCTEReq *pcter,
+							 EExecEngine ee)
 	: m_pcrs(pcrs),
 	  m_peo(peo),
 	  m_ped(ped),
 	  m_per(per),
 	  m_pepp(pepp),
-	  m_pcter(pcter)
+	  m_pcter(pcter),
+	  m_ee(ee)
 {
 	GPOS_ASSERT(nullptr != pcrs);
 	GPOS_ASSERT(nullptr != peo);
@@ -173,6 +175,8 @@ CReqdPropPlan::Compute(CMemoryPool *mp, CExpressionHandle &exprhdl,
 								  prppInput->Pepp()->PppsRequired(),
 								  child_index, pdrgpdpCtxt, ulPartPropagateReq),
 		CEnfdPartitionPropagation::EppmSatisfy);
+
+	m_ee = popPhysical->EeRequired(exprhdl, child_index);
 }
 
 //---------------------------------------------------------------------------
@@ -268,7 +272,7 @@ CReqdPropPlan::Equals(const CReqdPropPlan *prpp) const
 	BOOL result = PcrsRequired()->Equals(prpp->PcrsRequired()) &&
 				  Pcter()->Equals(prpp->Pcter()) &&
 				  Peo()->Matches(prpp->Peo()) && Ped()->Matches(prpp->Ped()) &&
-				  Per()->Matches(prpp->Per());
+				  Per()->Matches(prpp->Per()) && Ee() == prpp->Ee();
 
 	if (result)
 	{
@@ -308,6 +312,7 @@ CReqdPropPlan::HashValue() const
 	ulHash = gpos::CombineHashes(ulHash, m_ped->HashValue());
 	ulHash = gpos::CombineHashes(ulHash, m_per->HashValue());
 	ulHash = gpos::CombineHashes(ulHash, m_pcter->HashValue());
+	ulHash = gpos::CombineHashes(ulHash, (ULONG) m_ee);
 
 	return ulHash;
 }
@@ -345,7 +350,8 @@ CReqdPropPlan::FSatisfied(const CDrvdPropRelational *pdprel,
 		return pdpplan->Pds()->FSatisfies(this->Ped()->PdsRequired()) &&
 			   pdpplan->Prs()->FSatisfies(this->Per()->PrsRequired()) &&
 			   pdpplan->Ppps()->FSatisfies(this->Pepp()->PppsRequired()) &&
-			   pdpplan->GetCostModel()->FSatisfies(this->Pcter());
+			   pdpplan->GetCostModel()->FSatisfies(this->Pcter()) &&
+			   pdpplan->Ee() == EeBase(this->Ee());
 	}
 
 	// otherwise, check satisfiability of all plan properties
@@ -378,7 +384,8 @@ CReqdPropPlan::FCompatible(CExpressionHandle &exprhdl, CPhysical *popPhysical,
 		   m_ped->FCompatible(pdpplan->Pds()) &&
 		   m_per->FCompatible(pdpplan->Prs()) &&
 		   pdpplan->Ppps()->FSatisfies(m_pepp->PppsRequired()) &&
-		   popPhysical->FProvidesReqdCTEs(exprhdl, m_pcter);
+		   popPhysical->FProvidesReqdCTEs(exprhdl, m_pcter) &&
+		   pdpplan->Ee() == EeBase(m_ee);
 }
 
 //---------------------------------------------------------------------------
@@ -461,7 +468,7 @@ CReqdPropPlan::OsPrint(IOstream &os) const
 	{
 		os << GetPrintablePtr(m_pepp);
 	}
-	os << "]";
+	os << "], req engine: [" << SzExecEngine(m_ee) << "]";
 
 	return os;
 }
@@ -485,6 +492,7 @@ CReqdPropPlan::UlHashForCostBounding(const CReqdPropPlan *prpp)
 	{
 		ulHash = CombineHashes(ulHash, prpp->Ped()->HashValue());
 	}
+	ulHash = CombineHashes(ulHash, (ULONG) prpp->Ee());
 
 	return ulHash;
 }
@@ -504,6 +512,11 @@ CReqdPropPlan::FEqualForCostBounding(const CReqdPropPlan *prppFst,
 {
 	GPOS_ASSERT(nullptr != prppFst);
 	GPOS_ASSERT(nullptr != prppSnd);
+
+	if (prppFst->Ee() != prppSnd->Ee())
+	{
+		return false;
+	}
 
 	if (nullptr == prppFst->Ped() || nullptr == prppSnd->Ped())
 	{
@@ -601,7 +614,8 @@ CReqdPropPlan::PrppRemapForCTE(CMemoryPool *mp, CReqdPropPlan *prppProducer,
 	prppProducer->Pcter()->AddRef();
 	CCTEReq *pcter = prppProducer->Pcter();
 
-	return GPOS_NEW(mp) CReqdPropPlan(pcrsRequired, peo, ped, per, pepp, pcter);
+	return GPOS_NEW(mp) CReqdPropPlan(pcrsRequired, peo, ped, per, pepp, pcter,
+									  prppProducer->Ee());
 }
 
 

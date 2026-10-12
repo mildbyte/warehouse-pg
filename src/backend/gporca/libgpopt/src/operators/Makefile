@@ -134,6 +134,7 @@ OBJS        = CExpression.o \
               CPhysicalSort.o \
               CPhysicalSplit.o \
               CPhysicalSpool.o \
+              CPhysicalEngineConvert.o \
               CPhysicalStreamAgg.o \
               CPhysicalStreamAggDeduplicate.o \
               CPhysicalTVF.o \

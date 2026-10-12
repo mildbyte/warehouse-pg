@@ -1041,3 +1041,15 @@ CPhysical::PppsDerive(CMemoryPool *mp, CExpressionHandle &exprhdl) const
 }
 
 // EOF
+
+
+CEnfdProp::EPropEnforcingType
+CPhysical::EpetEngine(CExpressionHandle &exprhdl, EExecEngine eeRequired) const
+{
+	if (CDrvdPropPlan::Pdpplan(exprhdl.Pdp())->Ee() == EeBase(eeRequired))
+	{
+		return CEnfdProp::EpetUnnecessary;
+	}
+	return FEeNative(eeRequired) ? CEnfdProp::EpetProhibited
+								 : CEnfdProp::EpetRequired;
+}

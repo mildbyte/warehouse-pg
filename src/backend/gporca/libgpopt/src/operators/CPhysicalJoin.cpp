@@ -53,7 +53,8 @@ CPhysicalJoin::CPhysicalJoin(CMemoryPool *mp, CXform::EXformId origin_xform)
 BOOL
 CPhysicalJoin::Matches(COperator *pop) const
 {
-	return Eopid() == pop->Eopid();
+	return Eopid() == pop->Eopid() &&
+		   CPhysical::PopConvert(pop)->ExecEngine() == ExecEngine();
 }
 
 

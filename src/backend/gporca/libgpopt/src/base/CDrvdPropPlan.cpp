@@ -97,6 +97,7 @@ CDrvdPropPlan::Derive(CMemoryPool *mp, CExpressionHandle &exprhdl,
 		m_pds = popPhysical->PdsDerive(mp, exprhdl);
 		m_prs = popPhysical->PrsDerive(mp, exprhdl);
 		m_ppps = popPhysical->PppsDerive(mp, exprhdl);
+		m_ee = popPhysical->EeDerive(exprhdl);
 
 		GPOS_ASSERT(CDistributionSpec::EdtAny != m_pds->Edt() &&
 					"CDistributionAny is a require-only, cannot be derived");
@@ -168,7 +169,7 @@ CDrvdPropPlan::FSatisfies(const CReqdPropPlan *prpp) const
 		   m_pds->FSatisfies(prpp->Ped()->PdsRequired()) &&
 		   m_prs->FSatisfies(prpp->Per()->PrsRequired()) &&
 		   m_ppps->FSatisfies(prpp->Pepp()->PppsRequired()) &&
-		   m_pcm->FSatisfies(prpp->Pcter());
+		   m_pcm->FSatisfies(prpp->Pcter()) && m_ee == EeBase(prpp->Ee());
 }
 
 
@@ -186,6 +187,7 @@ CDrvdPropPlan::HashValue() const
 	ULONG ulHash = gpos::CombineHashes(m_pos->HashValue(), m_pds->HashValue());
 	ulHash = gpos::CombineHashes(ulHash, m_prs->HashValue());
 	ulHash = gpos::CombineHashes(ulHash, m_pcm->HashValue());
+	ulHash = gpos::CombineHashes(ulHash, (ULONG) m_ee);
 
 	return ulHash;
 }
@@ -203,7 +205,7 @@ CDrvdPropPlan::Equals(const CDrvdPropPlan *pdpplan) const
 {
 	return m_pos->Matches(pdpplan->Pos()) && m_pds->Equals(pdpplan->Pds()) &&
 		   m_prs->Matches(pdpplan->Prs()) && m_ppps->Equals(pdpplan->Ppps()) &&
-		   m_pcm->Equals(pdpplan->GetCostModel());
+		   m_pcm->Equals(pdpplan->GetCostModel()) && m_ee == pdpplan->Ee();
 }
 
 //---------------------------------------------------------------------------
@@ -220,7 +222,8 @@ CDrvdPropPlan::OsPrint(IOstream &os) const
 	os << "Drvd Plan Props ("
 	   << "ORD: " << (*m_pos) << ", DIST: " << (*m_pds)
 	   << ", REWIND: " << (*m_prs) << ", PART PROP:" << (*m_ppps) << ")"
-	   << ", CTE Map: [" << *m_pcm << "]";
+	   << ", CTE Map: [" << *m_pcm << "]"
+	   << ", ENGINE: " << SzExecEngine(m_ee);
 
 	return os;
 }

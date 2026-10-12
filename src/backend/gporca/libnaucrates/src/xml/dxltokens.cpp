@@ -49,6 +49,8 @@ CDXLTokens::Init(CMemoryPool *mp)
 	m_dxl_memory_manager = GPOS_NEW(m_mp) CDXLMemoryManager(m_mp);
 
 	SWszMapElem rgStrMap[] = {
+		{EdxltokenPhysicalEngineConvert, GPOS_WSZ_LIT("EngineConvert")},
+		{EdxltokenEngineConvertToArrow, GPOS_WSZ_LIT("ToArrow")},
 		{EdxltokenDXLMessage, GPOS_WSZ_LIT("DXLMessage")},
 		{EdxltokenComment, GPOS_WSZ_LIT("Comment")},
 		{EdxltokenPlan, GPOS_WSZ_LIT("Plan")},

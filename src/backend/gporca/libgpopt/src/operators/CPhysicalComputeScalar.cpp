@@ -74,8 +74,8 @@ CPhysicalComputeScalar::~CPhysicalComputeScalar() = default;
 BOOL
 CPhysicalComputeScalar::Matches(COperator *pop) const
 {
-	// ComputeScalar doesn't contain any members as of now
-	return Eopid() == pop->Eopid();
+	return Eopid() == pop->Eopid() &&
+		   CPhysical::PopConvert(pop)->ExecEngine() == ExecEngine();
 }
 
 

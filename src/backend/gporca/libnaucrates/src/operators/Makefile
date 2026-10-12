@@ -70,6 +70,7 @@ OBJS        = CDXLColDescr.o \
               CDXLPhysicalJoin.o \
               CDXLPhysicalLimit.o \
               CDXLPhysicalMaterialize.o \
+              CDXLPhysicalEngineConvert.o \
               CDXLPhysicalMergeJoin.o \
               CDXLPhysicalMotion.o \
               CDXLPhysicalDynamicForeignScan.o \

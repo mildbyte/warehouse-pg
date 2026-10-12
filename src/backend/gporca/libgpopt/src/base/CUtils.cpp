@@ -1223,6 +1223,7 @@ CUtils::FEnforcer(COperator *pop)
 	return COperator::EopPhysicalSort == op_id ||
 		   COperator::EopPhysicalSpool == op_id ||
 		   COperator::EopPhysicalPartitionSelector == op_id ||
+		   COperator::EopPhysicalEngineConvert == op_id ||
 		   FPhysicalMotion(pop);
 }
 

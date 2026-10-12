@@ -543,6 +543,10 @@ extern bool optimizer_enable_derive_stats_all_groups;
 
 /* Costing or tuning related GUCs used by the Optimizer */
 extern int optimizer_segments;
+extern bool optimizer_enable_arrow_engine;
+extern double optimizer_arrow_cost_factor;
+extern double optimizer_arrow_conversion_cost;
+extern int optimizer_arrow_operators;
 extern int optimizer_penalize_broadcast_threshold;
 extern double optimizer_cost_threshold;
 extern double optimizer_nestloop_factor;

@@ -162,6 +162,8 @@ enum Edxlopid
 
 	EdxlopPhysicalAssert,
 
+	EdxlopPhysicalEngineConvert,
+
 	EdxlopSentinel
 };
 

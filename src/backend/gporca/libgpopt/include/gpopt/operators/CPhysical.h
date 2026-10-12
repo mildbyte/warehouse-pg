@@ -20,6 +20,7 @@
 #include "gpopt/base/CEnfdOrder.h"
 #include "gpopt/base/CEnfdPartitionPropagation.h"
 #include "gpopt/base/CEnfdRewindability.h"
+#include "gpopt/base/CExecEngine.h"
 #include "gpopt/base/COrderSpec.h"
 #include "gpopt/base/CPartitionPropagationSpec.h"
 #include "gpopt/base/CRewindabilitySpec.h"
@@ -157,6 +158,9 @@ private:
 
 	// total number of optimization requests
 	ULONG m_ulTotalOptRequests;
+
+	// engine this operator runs in; Arrow variants are created by xforms
+	EExecEngine m_exec_engine{EeePG};
 
 	// update number of requests of a given property
 	void UpdateOptRequests(ULONG ulPropIndex, ULONG ulRequests);
@@ -410,6 +414,39 @@ public:
 		CExpressionHandle &exprhdl, const CEnfdPartitionPropagation *per) const;
 
 	// order matching type
+	EExecEngine
+	ExecEngine() const
+	{
+		return m_exec_engine;
+	}
+
+	void
+	SetExecEngine(EExecEngine ee)
+	{
+		m_exec_engine = ee;
+	}
+
+	// engine required from the given relational child
+	virtual EExecEngine
+	EeRequired(CExpressionHandle &,	 // exprhdl
+			   ULONG				 // child_index
+	) const
+	{
+		return m_exec_engine;
+	}
+
+	// engine of this operator's output
+	virtual EExecEngine
+	EeDerive(CExpressionHandle &  // exprhdl
+	) const
+	{
+		return m_exec_engine;
+	}
+
+	// whether an engine conversion is needed over this operator
+	virtual CEnfdProp::EPropEnforcingType EpetEngine(
+		CExpressionHandle &exprhdl, EExecEngine eeRequired) const;
+
 	virtual CEnfdOrder::EOrderMatching Eom(CReqdPropPlan *prppInput,
 										   ULONG child_index,
 										   CDrvdPropArray *pdrgpdpCtxt,

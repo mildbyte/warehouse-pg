@@ -15,6 +15,7 @@
 
 #include "gpopt/base/CCastUtils.h"
 #include "gpopt/base/CColRef.h"
+#include "gpopt/base/CExecEngine.h"
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/base/CUtils.h"
 #include "gpopt/hints/CHintUtils.h"
@@ -646,6 +647,24 @@ CXformUtils::AddHashOrMergeJoinAlternative(
 	T *op =
 		GPOS_NEW(mp) T(mp, pdrgpexprOuter, pdrgpexprInner, opfamilies,
 					   is_hash_join_null_aware, popLogicalJoin->OriginXform());
+
+	// Arrow twin; only plain inner joins for now. The key arrays are shared,
+	// so take references before the PG alternative may be released below.
+	BOOL fArrow =
+		COperator::EopPhysicalInnerHashJoin == op->Eopid() &&
+		!is_hash_join_null_aware && CArrowEngineUtils::FEnabled(EaomHashJoin) &&
+		CArrowEngineUtils::FColsSupported((*pexprJoin)[2]->DeriveUsedColumns()) &&
+		CArrowEngineUtils::FScalarSupported((*pexprJoin)[2]);
+	if (fArrow)
+	{
+		pdrgpexprOuter->AddRef();
+		pdrgpexprInner->AddRef();
+		if (nullptr != opfamilies)
+		{
+			opfamilies->AddRef();
+		}
+	}
+
 	CExpression *pexprResult = GPOS_NEW(mp)
 		CExpression(mp, op, (*pexprJoin)[0], (*pexprJoin)[1], (*pexprJoin)[2]);
 	if (!CHintUtils::SatisfiesJoinTypeHints(
@@ -657,6 +676,20 @@ CXformUtils::AddHashOrMergeJoinAlternative(
 	else
 	{
 		pxfres->Add(pexprResult);
+	}
+
+	if (fArrow)
+	{
+		for (ULONG ul = 0; ul < 3; ul++)
+		{
+			(*pexprJoin)[ul]->AddRef();
+		}
+		T *popArrow =
+			GPOS_NEW(mp) T(mp, pdrgpexprOuter, pdrgpexprInner, opfamilies,
+						   is_hash_join_null_aware, popLogicalJoin->OriginXform());
+		popArrow->SetExecEngine(EeeArrow);
+		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popArrow, (*pexprJoin)[0],
+											 (*pexprJoin)[1], (*pexprJoin)[2]));
 	}
 }
 

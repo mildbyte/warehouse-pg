@@ -13,6 +13,8 @@
 
 #include "gpos/base.h"
 
+#include "gpopt/base/CExecEngine.h"
+
 #include "gpopt/base/CColRef.h"
 #include "gpopt/base/CReqdProp.h"
 
@@ -63,6 +65,8 @@ private:
 	// required ctes
 	CCTEReq *m_pcter{nullptr};
 
+	EExecEngine m_ee{EeePG};
+
 public:
 	CReqdPropPlan(const CReqdPropPlan &) = delete;
 
@@ -72,7 +76,7 @@ public:
 	// ctor
 	CReqdPropPlan(CColRefSet *pcrs, CEnfdOrder *peo, CEnfdDistribution *ped,
 				  CEnfdRewindability *per, CEnfdPartitionPropagation *pepp,
-				  CCTEReq *pcter);
+				  CCTEReq *pcter, EExecEngine ee = EeePG);
 
 	// dtor
 	~CReqdPropPlan() override;
@@ -140,6 +144,12 @@ public:
 	Pcter() const
 	{
 		return m_pcter;
+	}
+
+	EExecEngine
+	Ee() const
+	{
+		return m_ee;
 	}
 
 	// given a property spec type, return the corresponding property spec member

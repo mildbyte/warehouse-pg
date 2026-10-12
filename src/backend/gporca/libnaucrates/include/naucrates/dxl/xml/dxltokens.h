@@ -771,6 +771,9 @@ enum Edxltoken
 	EdxltokenSubtract,
 	EdxltokenMultiply,
 
+	EdxltokenPhysicalEngineConvert,
+	EdxltokenEngineConvertToArrow,
+
 	EdxltokenSentinel
 };
 

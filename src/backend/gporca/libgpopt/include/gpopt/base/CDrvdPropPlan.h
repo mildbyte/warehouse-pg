@@ -12,6 +12,8 @@
 #define GPOPT_CDrvdPropPlan_H
 
 #include "gpos/base.h"
+
+#include "gpopt/base/CExecEngine.h"
 #include "gpos/common/CRefCount.h"
 
 #include "gpopt/base/CColRef.h"
@@ -59,6 +61,8 @@ private:
 
 	// derived cte map
 	CCTEMap *m_pcm{nullptr};
+
+	EExecEngine m_ee{EeePG};
 
 	// copy CTE producer plan properties from given context to current object
 	void CopyCTEProducerPlanProps(CMemoryPool *mp, CDrvdPropCtxt *pdpctxt,
@@ -119,6 +123,12 @@ public:
 	GetCostModel() const
 	{
 		return m_pcm;
+	}
+
+	EExecEngine
+	Ee() const
+	{
+		return m_ee;
 	}
 
 	// hash function

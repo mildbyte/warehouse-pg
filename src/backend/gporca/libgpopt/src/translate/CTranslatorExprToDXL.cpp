@@ -60,6 +60,7 @@
 #include "gpopt/operators/CPhysicalSequenceProject.h"
 #include "gpopt/operators/CPhysicalSort.h"
 #include "gpopt/operators/CPhysicalSplit.h"
+#include "gpopt/operators/CPhysicalEngineConvert.h"
 #include "gpopt/operators/CPhysicalSpool.h"
 #include "gpopt/operators/CPhysicalStreamAgg.h"
 #include "gpopt/operators/CPhysicalStreamAggDeduplicate.h"
@@ -115,6 +116,7 @@
 #include "naucrates/dxl/operators/CDXLPhysicalIndexOnlyScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalIndexScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalLimit.h"
+#include "naucrates/dxl/operators/CDXLPhysicalEngineConvert.h"
 #include "naucrates/dxl/operators/CDXLPhysicalMaterialize.h"
 #include "naucrates/dxl/operators/CDXLPhysicalMergeJoin.h"
 #include "naucrates/dxl/operators/CDXLPhysicalNLJoin.h"
@@ -457,6 +459,11 @@ CTranslatorExprToDXL::CreateDXLNode(CExpression *pexpr,
 			break;
 		case COperator::EopPhysicalSpool:
 			dxlnode = CTranslatorExprToDXL::PdxlnMaterialize(
+				pexpr, colref_array, pdrgpdsBaseTables, pulNonGatherMotions,
+				pfDML);
+			break;
+		case COperator::EopPhysicalEngineConvert:
+			dxlnode = CTranslatorExprToDXL::PdxlnEngineConvert(
 				pexpr, colref_array, pdrgpdsBaseTables, pulNonGatherMotions,
 				pfDML);
 			break;
@@ -4889,6 +4896,34 @@ CTranslatorExprToDXL::PdxlnMotion(CExpression *pexprMotion,
 //		Create a DXL materialize node from an optimizer spool expression
 //
 //---------------------------------------------------------------------------
+CDXLNode *
+CTranslatorExprToDXL::PdxlnEngineConvert(
+	CExpression *pexprConvert, CColRefArray *colref_array,
+	CDistributionSpecArray *pdrgpdsBaseTables, ULONG *pulNonGatherMotions,
+	BOOL *pfDML)
+{
+	GPOS_ASSERT(1 == pexprConvert->Arity());
+
+	CDXLNode *child_dxlnode = CreateDXLNode(
+		(*pexprConvert)[0], colref_array, pdrgpdsBaseTables,
+		pulNonGatherMotions, pfDML, false /*fRemap*/, false /*fRoot*/);
+
+	CPhysicalEngineConvert *popConvert =
+		CPhysicalEngineConvert::PopConvert(pexprConvert->Pop());
+	CDXLPhysicalEngineConvert *dxlop = GPOS_NEW(m_mp)
+		CDXLPhysicalEngineConvert(m_mp, EeeArrow == popConvert->EeTarget());
+
+	CDXLNode *proj_list_dxlnode =
+		CTranslatorExprToDXLUtils::PdxlnProjListFromChildProjList(
+			m_mp, m_pcf, m_phmcrdxln, (*child_dxlnode)[0]);
+
+	CDXLNode *dxlnode = GPOS_NEW(m_mp) CDXLNode(m_mp, dxlop);
+	dxlnode->SetProperties(GetProperties(pexprConvert));
+	dxlnode->AddChild(proj_list_dxlnode);
+	dxlnode->AddChild(child_dxlnode);
+	return dxlnode;
+}
+
 CDXLNode *
 CTranslatorExprToDXL::PdxlnMaterialize(
 	CExpression *pexprSpool, CColRefArray *colref_array,

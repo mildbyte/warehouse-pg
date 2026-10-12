@@ -13,6 +13,8 @@
 
 #include "gpos/base.h"
 
+#include "gpopt/base/CExecEngine.h"
+
 #include "gpopt/operators/CLogicalProject.h"
 #include "gpopt/operators/CPatternLeaf.h"
 #include "gpopt/operators/CPhysicalComputeScalar.h"
@@ -76,6 +78,20 @@ CXformProject2ComputeScalar::Transform(CXformContext *pxfctxt,
 
 	// add alternative to results
 	pxfres->Add(pexprComputeScalar);
+
+	if (CArrowEngineUtils::FEnabled(EaomComputeScalar) &&
+		CArrowEngineUtils::FColsSupported(pexprScalar->DeriveUsedColumns()) &&
+		CArrowEngineUtils::FColsSupported(pexprScalar->DeriveDefinedColumns()) &&
+		CArrowEngineUtils::FScalarSupported(pexprScalar))
+	{
+		pexprRelational->AddRef();
+		pexprScalar->AddRef();
+		CPhysicalComputeScalar *popArrow =
+			GPOS_NEW(mp) CPhysicalComputeScalar(mp);
+		popArrow->SetExecEngine(EeeArrow);
+		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popArrow, pexprRelational,
+											 pexprScalar));
+	}
 }
 
 

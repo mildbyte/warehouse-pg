@@ -13,6 +13,8 @@
 
 #include "gpos/base.h"
 
+#include "gpopt/base/CExecEngine.h"
+
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/operators/CLogicalGbAgg.h"
 #include "gpopt/operators/CPatternLeaf.h"
@@ -140,6 +142,26 @@ CXformGbAgg2HashAgg::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 
 	// add alternative to transformation result
 	pxfres->Add(pexprAlt);
+
+	BOOL fDQA = nullptr != pdrgpcrArgDQA && 0 != pdrgpcrArgDQA->Size();
+	if (!fDQA && COperator::EgbaggtypeIntermediate != popAgg->Egbaggtype() &&
+		CArrowEngineUtils::FEnabled(EaomHashAgg) &&
+		CArrowEngineUtils::FColsSupported(pexpr->DeriveOutputColumns()) &&
+		CArrowEngineUtils::FScalarSupported(pexprScalar))
+	{
+		colref_array->AddRef();
+		pexprRel->AddRef();
+		pexprScalar->AddRef();
+		CPhysicalHashAgg *popArrow = GPOS_NEW(mp) CPhysicalHashAgg(
+			mp, colref_array, popAgg->PdrgpcrMinimal(), popAgg->Egbaggtype(),
+			popAgg->FGeneratesDuplicates(), nullptr /*pdrgpcrArgDQA*/,
+			CXformUtils::FMultiStageAgg(pexpr),
+			CXformUtils::FAggGenBySplitDQAXform(pexpr), popAgg->AggStage(),
+			!CXformUtils::FLocalAggCreatedByEagerAggXform(pexpr));
+		popArrow->SetExecEngine(EeeArrow);
+		pxfres->Add(GPOS_NEW(mp)
+						CExpression(mp, popArrow, pexprRel, pexprScalar));
+	}
 }
 
 //---------------------------------------------------------------------------

@@ -11,11 +11,13 @@
 
 #include "gpdbcost/CCostModelGPDB.h"
 
+#include <algorithm>
 #include <limits>
 
 #include "gpopt/base/CColRefSetIter.h"
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/base/COrderSpec.h"
+#include "gpopt/base/CExecEngine.h"
 #include "gpopt/base/CWindowFrame.h"
 #include "gpopt/engine/CHint.h"
 #include "gpopt/metadata/CIndexDescriptor.h"
@@ -2401,6 +2403,32 @@ CCostModelGPDB::Cost(
 {
 	GPOS_ASSERT(nullptr != pci);
 
+	COperator::EOperatorId op_id = exprhdl.Pop()->Eopid();
+	if (COperator::EopPhysicalEngineConvert == op_id)
+	{
+		// per-byte conversion, plus the child
+		DOUBLE local = pci->NumRebinds() * pci->Rows() *
+					   std::max(pci->Width(), 1.0) *
+					   g_arrow_engine.m_conversion_cost;
+		return CCost(local) +
+			   CostChildren(m_mp, exprhdl, pci, m_cost_model_params);
+	}
+
+	CPhysical *popPhysical = CPhysical::PopConvert(exprhdl.Pop());
+	if (EeeArrow == popPhysical->ExecEngine())
+	{
+		CCost total = CostPG(exprhdl, pci);
+		CCost children = CostChildren(m_mp, exprhdl, pci, m_cost_model_params);
+		DOUBLE local = std::max(total.Get() - children.Get(), 0.0);
+		return children + CCost(local * g_arrow_engine.m_cost_factor);
+	}
+	return CostPG(exprhdl, pci);
+}
+
+CCost
+CCostModelGPDB::CostPG(CExpressionHandle &exprhdl,
+					   const SCostingInfo *pci) const
+{
 	COperator::EOperatorId op_id = exprhdl.Pop()->Eopid();
 	if (op_id == COperator::EopPhysicalComputeScalar)
 	{

@@ -38,6 +38,7 @@ extern "C" {
 #include "gpopt/engine/CCTEConfig.h"
 #include "gpopt/engine/CEnumeratorConfig.h"
 #include "gpopt/engine/CHint.h"
+#include "gpopt/base/CExecEngine.h"
 #include "gpopt/engine/CStatisticsConfig.h"
 #include "gpopt/eval/CConstExprEvaluatorDXL.h"
 #include "gpopt/exception.h"
@@ -89,6 +90,13 @@ using namespace gpdbcost;
 const CSystemId default_sysid(IMDId::EmdidGeneral, GPOS_WSZ_STR_LENGTH("GPDB"));
 
 plan_hint_hook_type plan_hint_hook = nullptr;
+orca_arrow_capability_hook_type orca_arrow_capability_hook = nullptr;
+
+static BOOL
+ArrowCapability(EArrowCapability kind, ULONG oid)
+{
+	return gpdb::ArrowCapability((int) kind, (Oid) oid);
+}
 
 // Check one-to-one mapping of row hint types
 GPOS_CPL_ASSERT(CRowHint::RVT_ABSOLUTE ==
@@ -904,6 +912,13 @@ COptTasks::OptimizeTask(void *ptr)
 			mp, CXform::ExfSentinel);
 		SetTraceflags(mp, trace_flags, &enabled_trace_flags,
 					  &disabled_trace_flags);
+
+		g_arrow_engine.m_enabled = optimizer_enable_arrow_engine &&
+								   nullptr != orca_arrow_capability_hook;
+		g_arrow_engine.m_capability = ArrowCapability;
+		g_arrow_engine.m_cost_factor = optimizer_arrow_cost_factor;
+		g_arrow_engine.m_conversion_cost = optimizer_arrow_conversion_cost;
+		g_arrow_engine.m_operators = (ULONG) optimizer_arrow_operators;
 
 		// set up relcache MD provider
 		CMDProviderRelcache *relcache_provider =

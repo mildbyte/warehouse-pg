@@ -53,6 +53,7 @@ OBJS        = CAutoOptCtxt.o \
               CEnfdPartitionPropagation.o \
               CEnfdProp.o \
               CEnfdRewindability.o \
+              CExecEngine.o \
               CFunctionProp.o \
               CFunctionalDependency.o \
               CIOUtils.o \

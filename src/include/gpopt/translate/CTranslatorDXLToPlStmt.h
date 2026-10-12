@@ -347,6 +347,15 @@ private:
 			ctxt_translation_prev_siblings	// translation contexts of previous siblings
 	);
 
+	Plan *TranslateDXLArrowIsland(
+		const CDXLNode *island_dxlnode, CDXLTranslateContext *output_context,
+		CDXLTranslationContextArray *ctxt_translation_prev_siblings);
+
+	void CollectArrowIslandLeaves(
+		const CDXLNode *dxlnode, CDXLTranslateContext *output_context,
+		CDXLTranslationContextArray *ctxt_translation_prev_siblings,
+		List **leaves);
+
 	Plan *TranslateDXLMaterialize(
 		const CDXLNode *materialize_dxlnode,
 		CDXLTranslateContext *output_context,

@@ -10,6 +10,8 @@
 //---------------------------------------------------------------------------
 #include "gpopt/engine/CEngine.h"
 
+#include <cstdlib>
+
 #include "gpos/base.h"
 #include "gpos/common/CAutoTimer.h"
 #include "gpos/common/syslibwrapper.h"
@@ -41,6 +43,7 @@
 #include "gpopt/operators/CPhysicalMotionGather.h"
 #include "gpopt/operators/CPhysicalPartitionSelector.h"
 #include "gpopt/operators/CPhysicalSort.h"
+#include "gpopt/operators/CPhysicalEngineConvert.h"
 #include "gpopt/optimizer/COptimizerConfig.h"
 #include "gpopt/search/CBinding.h"
 #include "gpopt/search/CGroup.h"
@@ -2143,8 +2146,22 @@ CEngine::FCheckEnfdProps(CMemoryPool *mp, CGroupExpression *pgexpr,
 	// expression G because it was prohibited, some other group expression H may
 	// decide to add it. And if E is added, it is possible for E to consider both
 	// G and H as its child.
+	CEnfdProp::EPropEnforcingType epetEngine =
+		popPhysical->EpetEngine(exprhdl, prpp->Ee());
+
+	if (nullptr != getenv("ORCA_ENGINE_TRACE"))
+	{
+		CAutoTrace at(m_mp);
+		at.Os() << "ENFD grp " << pgexpr->Pgroup()->Id() << " gexpr "
+				<< pgexpr->Id() << " " << popPhysical->SzId() << "/"
+				<< SzExecEngine(popPhysical->ExecEngine()) << " epet o"
+				<< epetOrder << " d" << epetDistribution << " r"
+				<< epetRewindability << " p" << epetPartitionPropagation
+				<< " e" << epetEngine << " req: " << *prpp;
+	}
 	if (FProhibited(epetOrder, epetDistribution, epetRewindability,
-					epetPartitionPropagation))
+					epetPartitionPropagation) ||
+		CEnfdProp::EpetProhibited == epetEngine)
 	{
 		pcc->Release();
 		return false;
@@ -2168,6 +2185,12 @@ CEngine::FCheckEnfdProps(CMemoryPool *mp, CGroupExpression *pgexpr,
 								 epetRewindability, exprhdl);
 	prpp->Pepp()->AppendEnforcers(mp, prpp, pdrgpexprEnforcers, pexpr,
 								  epetPartitionPropagation, exprhdl);
+	if (CEnfdProp::FEnforce(epetEngine))
+	{
+		pexpr->AddRef();
+		pdrgpexprEnforcers->Append(GPOS_NEW(mp) CExpression(
+			mp, GPOS_NEW(mp) CPhysicalEngineConvert(mp, EeBase(prpp->Ee())), pexpr));
+	}
 
 	if (0 < pdrgpexprEnforcers->Size())
 	{
@@ -2178,7 +2201,8 @@ CEngine::FCheckEnfdProps(CMemoryPool *mp, CGroupExpression *pgexpr,
 	pcc->Release();
 
 	return FOptimize(epetOrder, epetDistribution, epetRewindability,
-					 epetPartitionPropagation);
+					 epetPartitionPropagation) &&
+		   CEnfdProp::FOptimize(epetEngine);
 }
 
 //---------------------------------------------------------------------------
@@ -2281,6 +2305,13 @@ CEngine::FCheckReqdProps(CExpressionHandle &exprhdl, CReqdPropPlan *prpp,
 		m_pmemo->OsPrint(at.Os());
 	}
 
+	if (nullptr != getenv("ORCA_ENGINE_TRACE"))
+	{
+		CAutoTrace at(m_mp);
+		at.Os() << "REQD grp " << exprhdl.Pgexpr()->Pgroup()->Id() << " gexpr "
+				<< exprhdl.Pgexpr()->Id() << " "
+				<< exprhdl.Pop()->SzId() << " req: " << *prpp;
+	}
 	// check if operator provides required columns
 	if (!prpp->FProvidesReqdCols(m_mp, exprhdl, ulOptReq))
 	{
@@ -2314,6 +2345,22 @@ CEngine::FCheckReqdProps(CExpressionHandle &exprhdl, CReqdPropPlan *prpp,
 	// spool optimizing same group with the same optimization context;
 	if (!prpp->Per()->PrsRequired()->IsCheckRequired() &&
 		COperator::EopPhysicalSpool == op_id)
+	{
+		return false;
+	}
+
+	// an engine conversion optimizing its own group under the engine it
+	// converts from would request the same context from itself
+	if (COperator::EopPhysicalEngineConvert == op_id &&
+		CPhysicalEngineConvert::PopConvert(popPhysical)->EeTarget() !=
+			prpp->Ee())
+	{
+		return false;
+	}
+
+	// every column crossing the engine boundary has to be convertible
+	if (COperator::EopPhysicalEngineConvert == op_id &&
+		!CArrowEngineUtils::FColsSupported(prpp->PcrsRequired()))
 	{
 		return false;
 	}

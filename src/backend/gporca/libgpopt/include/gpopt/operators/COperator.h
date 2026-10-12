@@ -266,6 +266,7 @@ public:
 
 		EopLogicalIndexOnlyGet,
 		EopLogicalDynamicIndexOnlyGet,
+		EopPhysicalEngineConvert,
 		EopSentinel
 	};
 

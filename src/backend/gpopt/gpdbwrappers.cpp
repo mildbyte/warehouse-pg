@@ -38,6 +38,8 @@ extern "C" {
 #include "access/genam.h"
 #include "catalog/pg_inherits.h"
 #include "foreign/fdwapi.h"
+#include "nodes/extensible.h"
+#include "optimizer/orca.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
 #include "optimizer/optimizer.h"
@@ -2769,6 +2771,29 @@ gpdb::TestexprIsHashable(Node *testexpr, List *param_ids)
 	}
 	GP_WRAP_END;
 	return false;
+}
+
+bool
+gpdb::ArrowCapability(int kind, Oid oid)
+{
+	GP_WRAP_START;
+	{
+		return nullptr != orca_arrow_capability_hook &&
+			   orca_arrow_capability_hook(kind, oid);
+	}
+	GP_WRAP_END;
+	return false;
+}
+
+const struct CustomScanMethods *
+gpdb::GetCustomScanMethods(const char *name, bool missing_ok)
+{
+	GP_WRAP_START;
+	{
+		return ::GetCustomScanMethods(name, missing_ok);
+	}
+	GP_WRAP_END;
+	return nullptr;
 }
 
 // EOF

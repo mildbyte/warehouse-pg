@@ -246,6 +246,8 @@ public:
 
 
 	// main driver for cost computation
+	CCost CostPG(CExpressionHandle &exprhdl, const SCostingInfo *pci) const;
+
 	CCost Cost(CExpressionHandle &exprhdl,
 			   const SCostingInfo *pci) const override;
 

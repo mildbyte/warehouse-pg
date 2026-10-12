@@ -28,6 +28,17 @@ extern Node *transformGroupedWindows(Node *node, void *context);
 typedef void *(*plan_hint_hook_type) (Query *parse);
 extern PGDLLIMPORT plan_hint_hook_type plan_hint_hook;
 
+/*
+ * Asked by Orca whether a type/operator/function/aggregate oid can run in
+ * the extension's Arrow engine. kind: 0 type, 1 operator, 2 function,
+ * 3 aggregate, 4 aggregate whose partial state is a plain value.
+ * Orca emits Arrow islands as CustomScans named ORCA_ARROW_ISLAND_NAME,
+ * whose custom_private holds the island DXL and custom_plans its inputs.
+ */
+typedef bool (*orca_arrow_capability_hook_type) (int kind, Oid oid);
+extern PGDLLIMPORT orca_arrow_capability_hook_type orca_arrow_capability_hook;
+#define ORCA_ARROW_ISLAND_NAME "Orca Arrow Island"
+
 #endif
 
 #endif /* ORCA_H */

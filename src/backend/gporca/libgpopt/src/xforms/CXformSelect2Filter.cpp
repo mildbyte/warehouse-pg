@@ -13,6 +13,8 @@
 
 #include "gpos/base.h"
 
+#include "gpopt/base/CExecEngine.h"
+
 #include "gpopt/operators/CLogicalSelect.h"
 #include "gpopt/operators/CPatternLeaf.h"
 #include "gpopt/operators/CPhysicalFilter.h"
@@ -96,6 +98,18 @@ CXformSelect2Filter::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 
 	// add alternative to results
 	pxfres->Add(pexprFilter);
+
+	if (CArrowEngineUtils::FEnabled(EaomFilter) &&
+		CArrowEngineUtils::FColsSupported(pexprScalar->DeriveUsedColumns()) &&
+		CArrowEngineUtils::FScalarSupported(pexprScalar))
+	{
+		pexprRelational->AddRef();
+		pexprScalar->AddRef();
+		CPhysicalFilter *popArrow = GPOS_NEW(mp) CPhysicalFilter(mp);
+		popArrow->SetExecEngine(EeeArrow);
+		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popArrow, pexprRelational,
+											 pexprScalar));
+	}
 }
 
 

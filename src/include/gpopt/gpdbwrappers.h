@@ -679,6 +679,12 @@ PartitionKey GPDBRelationRetrievePartitionKey(Relation rel);
 
 bool TestexprIsHashable(Node *testexpr, List *param_ids);
 
+// ask the extension whether an oid can run in its Arrow engine
+bool ArrowCapability(int kind, Oid oid);
+
+const struct CustomScanMethods *GetCustomScanMethods(const char *name,
+													 bool missing_ok);
+
 gpos::BOOL WalkQueryTree(Query *query, bool (*walker)(), void *context,
 						 int flags);
 

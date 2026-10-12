@@ -369,6 +369,10 @@ bool		optimizer_enable_derive_stats_all_groups;
 
 /* Costing related GUCs used by the Optimizer */
 int			optimizer_segments;
+bool		optimizer_enable_arrow_engine;
+double		optimizer_arrow_cost_factor;
+double		optimizer_arrow_conversion_cost;
+int			optimizer_arrow_operators;
 int			optimizer_penalize_broadcast_threshold;
 double		optimizer_cost_threshold;
 double		optimizer_nestloop_factor;
@@ -2147,6 +2151,16 @@ struct config_bool ConfigureNamesBool_gp[] =
 		},
 		&optimizer_enable_motions,
 		true,
+		NULL, NULL, NULL
+	},
+	{
+		{"optimizer_enable_arrow_engine", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Let the optimizer place operators in an external Arrow engine (needs an extension providing orca_arrow_capability_hook)."),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_arrow_engine,
+		false,
 		NULL, NULL, NULL
 	},
 	{
@@ -4162,6 +4176,17 @@ struct config_int ConfigureNamesInt_gp[] =
 	},
 
 	{
+		{"optimizer_arrow_operators", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Bitmask of operators with Arrow alternatives: 1 hash agg, 2 hash join, 4 compute scalar, 8 filter."),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_arrow_operators,
+		15, 0, INT_MAX,
+		NULL, NULL, NULL
+	},
+
+	{
 		{"optimizer_array_expansion_threshold", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Item limit for expansion of arrays in WHERE clause for constraint derivation."),
 			NULL,
@@ -4514,6 +4539,28 @@ struct config_real ConfigureNamesReal_gp[] =
 		},
 		&optimizer_damping_factor_filter,
 		0.75, 0.0, 1.0,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"optimizer_arrow_cost_factor", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Multiplier on the local cost of an operator running in the Arrow engine."),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_arrow_cost_factor,
+		0.5, 0.0, 100.0,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"optimizer_arrow_conversion_cost", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Cost per row and byte of converting between PG tuples and Arrow batches."),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_arrow_conversion_cost,
+		1.0e-6, 0.0, 1.0,
 		NULL, NULL, NULL
 	},
 

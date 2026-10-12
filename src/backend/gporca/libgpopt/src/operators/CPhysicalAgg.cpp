@@ -566,7 +566,8 @@ CPhysicalAgg::HashValue() const
 BOOL
 CPhysicalAgg::Matches(COperator *pop) const
 {
-	if (pop->Eopid() != Eopid())
+	if (pop->Eopid() != Eopid() ||
+		CPhysical::PopConvert(pop)->ExecEngine() != ExecEngine())
 	{
 		return false;
 	}
