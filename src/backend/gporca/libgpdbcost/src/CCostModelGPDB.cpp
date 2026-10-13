@@ -2421,7 +2421,8 @@ CCostModelGPDB::Cost(
 				: EaopToPG;
 		// Conversion work is per value and depends on the type. Pass the
 		// engine the converted columns' measured nanoseconds per row instead
-		// of a byte width: by-value ~0.5, numeric ~10, other varlena ~20.
+		// of a byte width: by-value ~0.5, numeric ~10, other varlena ~8 plus
+		// ~1 per byte (bpchar(1) ~8, bpchar(10) ~27, varchar(44) ~25).
 		// The memo's scans output every column, and pruning happens only at
 		// translation, so weigh the columns required above the conversion.
 		DOUBLE units = 0;
@@ -2435,7 +2436,8 @@ CCostModelGPDB::Cost(
 		CColRefSetIter crsi(*pcrs);
 		while (crsi.Advance())
 		{
-			const IMDType *type = crsi.Pcr()->RetrieveType();
+			const CColRef *colref = crsi.Pcr();
+			const IMDType *type = colref->RetrieveType();
 			if (CMDIdGPDB::CastMdid(type->MDId())->Oid() == GPDB_NUMERIC)
 			{
 				units += 10;
@@ -2446,7 +2448,15 @@ CCostModelGPDB::Cost(
 			}
 			else
 			{
-				units += 20;
+				DOUBLE width = 16;
+				if (nullptr != exprhdl.Pstats())
+				{
+					ULongPtrArray *colids = GPOS_NEW(m_mp) ULongPtrArray(m_mp);
+					colids->Append(GPOS_NEW(m_mp) ULONG(colref->Id()));
+					width = exprhdl.Pstats()->Width(colids).Get();
+					colids->Release();
+				}
+				units += 8 + std::min(width, 20.0);
 			}
 		}
 		pcrs->Release();
