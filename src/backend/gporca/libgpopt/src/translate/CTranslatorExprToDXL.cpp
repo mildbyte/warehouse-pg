@@ -4952,6 +4952,64 @@ CTranslatorExprToDXL::PdxlnEngineConvert(
 	CDXLPhysicalEngineConvert *dxlop = GPOS_NEW(m_mp)
 		CDXLPhysicalEngineConvert(m_mp, EeeArrow == popConvert->EeTarget());
 
+	// A correlated NLJ yields its inner columns as subplans, which its
+	// consumers inline wherever they reference them. Above a conversion to
+	// Arrow that would be inside the Arrow island, so evaluate them in a PG
+	// Result below the conversion and let the island read plain columns.
+	if (EeeArrow == popConvert->EeTarget())
+	{
+		CColRefArray *pdrgpcrSubplan = GPOS_NEW(m_mp) CColRefArray(m_mp);
+		CColRefSetIter crsi(*pexprConvert->DeriveOutputColumns());
+		while (crsi.Advance())
+		{
+			CDXLNode *pdxlnMapped = m_phmcrdxln->Find(crsi.Pcr());
+			if (nullptr != pdxlnMapped &&
+				EdxlopScalarSubPlan ==
+					pdxlnMapped->GetOperator()->GetDXLOperator())
+			{
+				pdrgpcrSubplan->Append(crsi.Pcr());
+			}
+		}
+		if (0 < pdrgpcrSubplan->Size())
+		{
+			CDXLNode *pdxlnProjList = (*child_dxlnode)[0];
+			CDXLNode *pdxlnProjListNew = GPOS_NEW(m_mp)
+				CDXLNode(m_mp, GPOS_NEW(m_mp) CDXLScalarProjList(m_mp));
+			CColRefSet *pcrsDone = GPOS_NEW(m_mp) CColRefSet(m_mp);
+			for (ULONG ul = 0; ul < pdxlnProjList->Arity(); ul++)
+			{
+				CDXLNode *pdxlnPrEl = (*pdxlnProjList)[ul];
+				pcrsDone->Include(m_pcf->LookupColRef(
+					CDXLScalarProjElem::Cast(pdxlnPrEl->GetOperator())->Id()));
+				pdxlnProjListNew->AddChild(
+					CTranslatorExprToDXLUtils::PdxlnProjElem(
+						m_mp, m_pcf, m_phmcrdxln, pdxlnPrEl));
+			}
+			for (ULONG ul = 0; ul < pdrgpcrSubplan->Size(); ul++)
+			{
+				CColRef *colref = (*pdrgpcrSubplan)[ul];
+				if (!pcrsDone->FMember(colref))
+				{
+					pdxlnProjListNew->AddChild(
+						CTranslatorExprToDXLUtils::PdxlnProjElem(
+							m_mp, m_phmcrdxln, colref));
+				}
+			}
+			pcrsDone->Release();
+			CDXLNode *pdxlnResult = GPOS_NEW(m_mp)
+				CDXLNode(m_mp, GPOS_NEW(m_mp) CDXLPhysicalResult(m_mp));
+			pdxlnResult->SetProperties(
+				CTranslatorExprToDXLUtils::PdxlpropCopy(m_mp, child_dxlnode));
+			pdxlnResult->AddChild(pdxlnProjListNew);
+			pdxlnResult->AddChild(PdxlnFilter(nullptr));
+			pdxlnResult->AddChild(GPOS_NEW(m_mp) CDXLNode(
+				m_mp, GPOS_NEW(m_mp) CDXLScalarOneTimeFilter(m_mp)));
+			pdxlnResult->AddChild(child_dxlnode);
+			child_dxlnode = pdxlnResult;
+		}
+		pdrgpcrSubplan->Release();
+	}
+
 	CDXLNode *proj_list_dxlnode =
 		CTranslatorExprToDXLUtils::PdxlnProjListFromChildProjList(
 			m_mp, m_pcf, m_phmcrdxln, (*child_dxlnode)[0]);
