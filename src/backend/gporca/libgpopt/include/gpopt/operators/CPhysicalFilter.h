@@ -130,6 +130,9 @@ public:
 		CExpressionHandle &exprhdl,
 		const CEnfdRewindability *per) const override;
 
+	EExecEngine EeRequired(CExpressionHandle &exprhdl,
+						   ULONG child_index) const override;
+
 	// return true if operator passes through stats obtained from children,
 	// this is used when computing stats during costing
 	BOOL
