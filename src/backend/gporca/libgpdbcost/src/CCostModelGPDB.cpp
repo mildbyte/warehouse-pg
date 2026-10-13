@@ -2455,7 +2455,22 @@ CCostModelGPDB::Cost(
 			default:
 				op = EaopHashAgg;
 		}
+		// pgaa builds the smaller side of a semi or anti join (DataFusion's
+		// LeftSemi/LeftAnti build the side they return), so cost it as such
+		BOOL fSwap = (COperator::EopPhysicalLeftSemiHashJoin == op_id ||
+					  COperator::EopPhysicalLeftAntiSemiHashJoin == op_id) &&
+					 pci->PdRows()[0] < pci->PdRows()[1];
+		if (fSwap)
+		{
+			std::swap(pci->PdRows()[0], pci->PdRows()[1]);
+			std::swap(pci->GetWidth()[0], pci->GetWidth()[1]);
+		}
 		CCost total = CostPG(exprhdl, pci);
+		if (fSwap)
+		{
+			std::swap(pci->PdRows()[0], pci->PdRows()[1]);
+			std::swap(pci->GetWidth()[0], pci->GetWidth()[1]);
+		}
 		CCost children = CostChildren(m_mp, exprhdl, pci, m_cost_model_params);
 		DOUBLE local = std::max(total.Get() - children.Get(), 0.0);
 		return children + CCost(g_arrow_engine.m_cost(op, local, pci->Rows(),
