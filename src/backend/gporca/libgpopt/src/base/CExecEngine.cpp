@@ -32,6 +32,7 @@
 #include "gpopt/operators/CScalarFunc.h"
 #include "gpopt/operators/CScalarIdent.h"
 #include "gpopt/operators/CScalarOp.h"
+#include "gpopt/operators/CScalarSwitch.h"
 #include "gpopt/search/CGroup.h"
 #include "gpopt/search/CGroupExpression.h"
 #include "naucrates/md/CMDIdGPDB.h"
@@ -264,6 +265,17 @@ CArrowEngineUtils::FScalarSupported(CExpression *pexpr)
 		case COperator::EopScalarOp:
 			if (!FAsk(EacOperator, CScalarOp::PopConvert(pop)->MdIdOp()) ||
 				!FAsk(EacType, CScalarOp::PopConvert(pop)->MdidType()))
+			{
+				return false;
+			}
+			break;
+
+		case COperator::EopScalarBooleanTest:
+		case COperator::EopScalarSwitchCase:
+			break;
+
+		case COperator::EopScalarSwitch:
+			if (!FAsk(EacType, CScalarSwitch::PopConvert(pop)->MdidType()))
 			{
 				return false;
 			}

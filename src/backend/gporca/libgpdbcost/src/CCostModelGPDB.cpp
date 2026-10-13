@@ -12,6 +12,13 @@
 #include "gpdbcost/CCostModelGPDB.h"
 
 #include <algorithm>
+#include "gpopt/base/CReqdPropPlan.h"
+#include "gpopt/base/COptimizationContext.h"
+#include "gpopt/base/CCostContext.h"
+
+#include "naucrates/dxl/gpdb_types.h"
+#include "naucrates/md/CMDIdGPDB.h"
+#include "naucrates/md/IMDType.h"
 #include <limits>
 
 #include "gpopt/base/CColRefSetIter.h"
@@ -2412,8 +2419,40 @@ CCostModelGPDB::Cost(
 							->EeTarget()
 				? EaopToArrow
 				: EaopToPG;
-		DOUBLE local = pci->NumRebinds() *
-					   g_arrow_engine.m_cost(op, 0.0, pci->Rows(), pci->Width());
+		// Conversion work is per value and depends on the type. Pass the
+		// engine the converted columns' measured nanoseconds per row instead
+		// of a byte width: by-value ~0.5, numeric ~10, other varlena ~20.
+		// The memo's scans output every column, and pruning happens only at
+		// translation, so weigh the columns required above the conversion.
+		DOUBLE units = 0;
+		CColRefSet *pcrs = GPOS_NEW(m_mp) CColRefSet(m_mp);
+		pcrs->Include(exprhdl.DeriveOutputColumns());
+		if (nullptr != exprhdl.Pcc())
+		{
+			pcrs->Intersection(
+				exprhdl.Pcc()->Poc()->Prpp()->PcrsRequired());
+		}
+		CColRefSetIter crsi(*pcrs);
+		while (crsi.Advance())
+		{
+			const IMDType *type = crsi.Pcr()->RetrieveType();
+			if (CMDIdGPDB::CastMdid(type->MDId())->Oid() == GPDB_NUMERIC)
+			{
+				units += 10;
+			}
+			else if (type->IsPassedByValue())
+			{
+				units += 0.5;
+			}
+			else
+			{
+				units += 20;
+			}
+		}
+		pcrs->Release();
+		DOUBLE local =
+			pci->NumRebinds() *
+			g_arrow_engine.m_cost(op, 0.0, pci->Rows(), std::max(units, 0.5));
 		return CCost(local) +
 			   CostChildren(m_mp, exprhdl, pci, m_cost_model_params);
 	}

@@ -189,6 +189,13 @@ public:
 	// required plan props of n-th child
 	CReqdPropPlan *Prpp(ULONG child_index) const;
 
+	// attached cost context, if any
+	CCostContext *
+	Pcc() const
+	{
+		return m_pcc;
+	}
+
 	// arity function
 	ULONG Arity() const;
 
