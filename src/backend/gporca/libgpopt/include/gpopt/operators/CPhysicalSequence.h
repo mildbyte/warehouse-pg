@@ -58,6 +58,11 @@ public:
 	// match function
 	BOOL Matches(COperator *pop) const override;
 
+	// An Arrow sequence passes the IPC batches of its last child through;
+	// the other children are CTE producers, which output no rows.
+	EExecEngine EeRequired(CExpressionHandle &exprhdl,
+						   ULONG child_index) const override;
+
 	// sensitivity to order of inputs
 	BOOL
 	FInputOrderSensitive() const override

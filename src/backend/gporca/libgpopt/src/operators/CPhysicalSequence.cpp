@@ -80,7 +80,19 @@ CPhysicalSequence::~CPhysicalSequence()
 BOOL
 CPhysicalSequence::Matches(COperator *pop) const
 {
-	return Eopid() == pop->Eopid();
+	return Eopid() == pop->Eopid() &&
+		   ExecEngine() == CPhysical::PopConvert(pop)->ExecEngine();
+}
+
+EExecEngine
+CPhysicalSequence::EeRequired(CExpressionHandle &exprhdl,
+							  ULONG child_index) const
+{
+	if (EeeArrow != ExecEngine())
+	{
+		return ExecEngine();
+	}
+	return child_index + 1 == exprhdl.Arity() ? EeeArrowNative : EeePG;
 }
 
 //---------------------------------------------------------------------------

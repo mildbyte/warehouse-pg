@@ -5125,6 +5125,8 @@ CTranslatorExprToDXL::PdxlnSequence(CExpression *pexprSequence,
 
 	// translate children
 	CDXLNodeArray *pdrgpdxlnChildren = GPOS_NEW(m_mp) CDXLNodeArray(m_mp);
+	const BOOL fArrow =
+		EeeArrow == CPhysical::PopConvert(pexprSequence->Pop())->ExecEngine();
 
 	for (ULONG ul = 0; ul < arity; ul++)
 	{
@@ -5140,6 +5142,20 @@ CTranslatorExprToDXL::PdxlnSequence(CExpression *pexprSequence,
 		CDXLNode *child_dxlnode = CreateDXLNode(
 			pexprChild, pdrgpcrChildOutput, pdrgpdsBaseTables,
 			pulNonGatherMotions, pfDML, false /*fRemap*/, false /*fRoot*/);
+		// an Arrow sequence passes the (segment, payload) rows of the island
+		// below its last child through to the island above it, as a motion
+		if (fArrow && ul == arity - 1)
+		{
+			CDXLNode *pdxlnSend = GPOS_NEW(m_mp) CDXLNode(
+				m_mp,
+				GPOS_NEW(m_mp) CDXLPhysicalEngineConvert(m_mp, false, true));
+			pdxlnSend->SetProperties(GetProperties(pexprChild));
+			pdxlnSend->AddChild(
+				CTranslatorExprToDXLUtils::PdxlnProjListFromChildProjList(
+					m_mp, m_pcf, m_phmcrdxln, (*child_dxlnode)[0]));
+			pdxlnSend->AddChild(child_dxlnode);
+			child_dxlnode = pdxlnSend;
+		}
 		pdrgpdxlnChildren->Append(child_dxlnode);
 	}
 
@@ -5165,6 +5181,18 @@ CTranslatorExprToDXL::PdxlnSequence(CExpression *pexprSequence,
 #ifdef GPOS_DEBUG
 	pdxlopSequence->AssertValid(pdxlnSequence, false /* validate_children */);
 #endif
+
+	if (fArrow)
+	{
+		CDXLNode *pdxlnRecv = GPOS_NEW(m_mp) CDXLNode(
+			m_mp, GPOS_NEW(m_mp) CDXLPhysicalEngineConvert(m_mp, true, true));
+		pdxlnRecv->SetProperties(GetProperties(pexprSequence));
+		pdxlnRecv->AddChild(
+			CTranslatorExprToDXLUtils::PdxlnProjListFromChildProjList(
+				m_mp, m_pcf, m_phmcrdxln, proj_list_dxlnode));
+		pdxlnRecv->AddChild(pdxlnSequence);
+		return pdxlnRecv;
+	}
 
 	return pdxlnSequence;
 }

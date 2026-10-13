@@ -728,6 +728,13 @@ CTranslatorDXLToPlStmt::TranslateDXLArrowMotion(const CDXLNode *motion_dxlnode,
 			motion->motionType = MOTIONTYPE_BROADCAST;
 			route = "broadcast";
 			break;
+		case EdxlopPhysicalMotionRandom:
+			motion->motionType = MOTIONTYPE_EXPLICIT;
+			motion->segidColIdx = 1;
+			snprintf(buf, sizeof(buf), "random %d",
+					 (int) motion_dxlop->GetOutputSegIdsArray()->Size());
+			route = buf;
+			break;
 		case EdxlopPhysicalMotionRedistribute:
 		{
 			motion->motionType = MOTIONTYPE_EXPLICIT;
@@ -4386,7 +4393,8 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEProducerToSharedScan(
 		GPOS_NEW(m_mp) CDXLTranslationContextArray(m_mp);
 	child_contexts->Append(&child_context);
 	if (EdxlopPhysicalEngineConvert ==
-		child_dxlnode->GetOperator()->GetDXLOperator())
+			child_dxlnode->GetOperator()->GetDXLOperator() &&
+		CDXLPhysicalEngineConvert::Cast(child_dxlnode->GetOperator())->IsIpc())
 	{
 		// an Arrow producer shares the (segment, payload) rows of its island
 		GPOS_ASSERT(IsA(child_plan, CustomScan));
@@ -4517,11 +4525,12 @@ CTranslatorDXLToPlStmt::TranslateDXLSequence(
 	CDXLTranslateContext child_context(m_mp, false,
 									   output_context->GetColIdToParamIdMap());
 
+	Plan *child_plan = nullptr;
 	for (ULONG ul = 1; ul < arity; ul++)
 	{
 		CDXLNode *child_dxlnode = (*sequence_dxlnode)[ul];
 
-		Plan *child_plan = TranslateDXLOperatorToPlan(
+		child_plan = TranslateDXLOperatorToPlan(
 			child_dxlnode, &child_context, ctxt_translation_prev_siblings);
 
 		psequence->subplans = gpdb::LAppend(psequence->subplans, child_plan);
@@ -4533,11 +4542,26 @@ CTranslatorDXLToPlStmt::TranslateDXLSequence(
 		GPOS_NEW(m_mp) CDXLTranslationContextArray(m_mp);
 	child_contexts->Append(&child_context);
 
-	// translate proj list
-	plan->targetlist =
-		TranslateDXLProjList(project_list_dxlnode,
-							 nullptr,  // base table translation context
-							 child_contexts, output_context);
+	const CDXLNode *last_dxlnode = (*sequence_dxlnode)[arity - 1];
+	if (EdxlopPhysicalEngineConvert ==
+			last_dxlnode->GetOperator()->GetDXLOperator() &&
+		CDXLPhysicalEngineConvert::Cast(last_dxlnode->GetOperator())->IsIpc())
+	{
+		// an Arrow sequence passes its last island's (segment, payload) rows
+		GPOS_ASSERT(IsA(child_plan, CustomScan));
+		plan->targetlist = ArrowIpcTargetList(OUTER_VAR);
+		CustomScan *island = (CustomScan *) child_plan;
+		island->custom_private = gpdb::LAppend(
+			island->custom_private, gpdb::MakeStringValue(PStrDup("gather")));
+	}
+	else
+	{
+		// translate proj list
+		plan->targetlist =
+			TranslateDXLProjList(project_list_dxlnode,
+								 nullptr,  // base table translation context
+								 child_contexts, output_context);
+	}
 
 	SetParamIds(plan);
 

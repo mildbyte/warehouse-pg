@@ -16,6 +16,7 @@
 #include "gpopt/metadata/CTableDescriptor.h"
 #include "gpopt/operators/CLogicalSequence.h"
 #include "gpopt/operators/CPatternMultiLeaf.h"
+#include "gpopt/base/CExecEngine.h"
 #include "gpopt/operators/CPhysicalSequence.h"
 
 using namespace gpopt;
@@ -65,6 +66,17 @@ CXformImplementSequence::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 		CExpression(mp, GPOS_NEW(mp) CPhysicalSequence(mp), pdrgpexpr);
 	// add alternative to transformation result
 	pxfres->Add(pexprAlt);
+
+	// the memo's outputs include unrequired columns (system columns of
+	// scans); the Arrow last child already passed a conversion of the
+	// columns it ships
+	if (CArrowEngineUtils::FEnabled(EaopMotion))
+	{
+		pdrgpexpr->AddRef();
+		CPhysicalSequence *popArrow = GPOS_NEW(mp) CPhysicalSequence(mp);
+		popArrow->SetExecEngine(EeeArrow);
+		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popArrow, pdrgpexpr));
+	}
 }
 
 

@@ -19,6 +19,7 @@
 #include "gpopt/operators/CPhysicalMotionBroadcast.h"
 #include "gpopt/operators/CPhysicalMotionGather.h"
 #include "gpopt/operators/CPhysicalMotionHashDistribute.h"
+#include "gpopt/operators/CPhysicalMotionRandom.h"
 
 #include "gpopt/base/CColRef.h"
 #include "gpopt/base/CColRefSet.h"
@@ -438,9 +439,10 @@ CArrowEngineUtils::FScalarSupported(CExpression *pexpr)
 
 // An Arrow motion ships the child's batches as (segment, IPC payload) rows
 // over the regular interconnect, so it is a plain Motion whose engine is
-// Arrow on both ends. Merging gathers and the duplicate-hazard redistributes
-// GPDB turns into hash filters stay PG; hash keys must be columns the engine
-// can hash exactly like cdbhash, so the result is co-located with tables.
+// Arrow on both ends. The duplicate-hazard redistributes GPDB turns into hash
+// filters stay PG; hash keys must be columns the engine can hash exactly like
+// cdbhash, so the result is co-located with tables. A merging gather ships
+// unordered and the receiving island sorts.
 CExpression *
 CArrowEngineUtils::PexprArrowMotion(CMemoryPool *mp, CExpressionHandle &exprhdl,
 									CExpression *pexprMotion)
@@ -486,11 +488,32 @@ CArrowEngineUtils::PexprArrowMotion(CMemoryPool *mp, CExpressionHandle &exprhdl,
 		{
 			CPhysicalMotionGather *popGather =
 				CPhysicalMotionGather::PopConvert(pop);
-			if (!popGather->Pos()->IsEmpty())
+			if (popGather->Pos()->IsEmpty())
+			{
+				popArrow =
+					GPOS_NEW(mp) CPhysicalMotionGather(mp, popGather->Est());
+			}
+			else
+			{
+				popGather->Pos()->AddRef();
+				popArrow = GPOS_NEW(mp) CPhysicalMotionGather(
+					mp, popGather->Est(), popGather->Pos());
+			}
+			break;
+		}
+
+		case COperator::EopPhysicalMotionRandom:
+		{
+			CDistributionSpecRandom *pds = CDistributionSpecRandom::PdsConvert(
+				CPhysicalMotionRandom::PopConvert(pop)->Pds());
+			if (pds->IsDuplicateSensitive() ||
+				CUtils::FDuplicateHazardDistributionSpec(
+					CDrvdPropPlan::Pdpplan(exprhdl.Pdp())->Pds()))
 			{
 				return nullptr;
 			}
-			popArrow = GPOS_NEW(mp) CPhysicalMotionGather(mp, popGather->Est());
+			pds->AddRef();
+			popArrow = GPOS_NEW(mp) CPhysicalMotionRandom(mp, pds);
 			break;
 		}
 

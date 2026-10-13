@@ -58,7 +58,8 @@ CPhysicalMotionRandom::~CPhysicalMotionRandom()
 BOOL
 CPhysicalMotionRandom::Matches(COperator *pop) const
 {
-	return Eopid() == pop->Eopid();
+	return Eopid() == pop->Eopid() &&
+		   ExecEngine() == CPhysical::PopConvert(pop)->ExecEngine();
 }
 
 //---------------------------------------------------------------------------
