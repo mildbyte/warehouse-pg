@@ -2412,8 +2412,11 @@ CEngine::FCheckReqdProps(CExpressionHandle &exprhdl, CReqdPropPlan *prpp,
 		return false;
 	}
 
-	// every column crossing the engine boundary has to be convertible
-	if (COperator::EopPhysicalEngineConvert == op_id &&
+	// every column crossing the engine boundary has to be convertible,
+	// including the ones an Arrow scan reads
+	if ((COperator::EopPhysicalEngineConvert == op_id ||
+		 (COperator::EopPhysicalTableScan == op_id &&
+		  EeeArrow == popPhysical->ExecEngine())) &&
 		!CArrowEngineUtils::FColsSupported(prpp->PcrsRequired()))
 	{
 		return false;

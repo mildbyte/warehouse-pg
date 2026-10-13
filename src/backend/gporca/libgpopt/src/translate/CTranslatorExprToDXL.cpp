@@ -757,6 +757,21 @@ CTranslatorExprToDXL::PdxlnTblScan(CExpression *pexprTblScan,
 	CDistributionSpec *pds = pexprTblScan->GetDrvdPropPlan()->Pds();
 	pds->AddRef();
 	pdrgpdsBaseTables->Append(pds);
+
+	// The engine reads an Arrow scan itself; in the plan it is the PG scan,
+	// filter included, as the leaf of a conversion
+	if (EeeArrow == popTblScan->ExecEngine())
+	{
+		CDXLNode *dxlnode = GPOS_NEW(m_mp)
+			CDXLNode(m_mp, GPOS_NEW(m_mp) CDXLPhysicalEngineConvert(m_mp, true));
+		dxlnode->SetProperties(
+			CTranslatorExprToDXLUtils::PdxlpropCopy(m_mp, pdxlnTblScan));
+		dxlnode->AddChild(
+			CTranslatorExprToDXLUtils::PdxlnProjListFromChildProjList(
+				m_mp, m_pcf, m_phmcrdxln, (*pdxlnTblScan)[0]));
+		dxlnode->AddChild(pdxlnTblScan);
+		return dxlnode;
+	}
 	return pdxlnTblScan;
 }
 

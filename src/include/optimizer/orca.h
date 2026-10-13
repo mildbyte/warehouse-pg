@@ -58,7 +58,8 @@ typedef enum OrcaEngineOp
 	ORCA_ENGINE_OP_FILTER,
 	ORCA_ENGINE_OP_SORT,
 	ORCA_ENGINE_OP_MOTION,		/* motion shipping engine batches */
-	ORCA_ENGINE_OP_WINDOW
+	ORCA_ENGINE_OP_WINDOW,
+	ORCA_ENGINE_OP_SCAN			/* AOCO scans read straight into batches */
 } OrcaEngineOp;
 
 /*

@@ -2507,6 +2507,9 @@ CCostModelGPDB::Cost(
 			case COperator::EopPhysicalSequenceProject:
 				op = EaopWindow;
 				break;
+			case COperator::EopPhysicalTableScan:
+				op = EaopScan;
+				break;
 			default:
 				op = EaopHashAgg;
 		}

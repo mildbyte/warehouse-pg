@@ -104,6 +104,19 @@ CXformGet2TableScan::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 		GPOS_NEW(mp) CPhysicalTableScan(mp, pname, ptabdesc, pdrgpcrOutput));
 	// add alternative to transformation result
 	pxfres->Add(pexprAlt);
+
+	if (CArrowEngineUtils::FEnabled(EaopScan) &&
+		IMDRelation::ErelstorageAppendOnlyCols ==
+			ptabdesc->RetrieveRelStorageType())
+	{
+		ptabdesc->AddRef();
+		pdrgpcrOutput->AddRef();
+		CPhysicalTableScan *popArrow = GPOS_NEW(mp) CPhysicalTableScan(
+			mp, GPOS_NEW(mp) CName(mp, popGet->Name()), ptabdesc,
+			pdrgpcrOutput);
+		popArrow->SetExecEngine(EeeArrow);
+		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popArrow));
+	}
 }
 
 

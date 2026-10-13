@@ -84,7 +84,8 @@ enum EArrowOp
 	EaopFilter,
 	EaopSort,  // sort enforcers and limits
 	EaopMotion,	 // motions that ship Arrow batches
-	EaopWindow
+	EaopWindow,
+	EaopScan  // scans the engine reads into batches itself
 };
 
 using FnArrowCapability = BOOL (*)(EArrowCapability kind, ULONG oid);

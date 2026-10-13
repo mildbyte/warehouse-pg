@@ -76,7 +76,8 @@ CPhysicalTableScan::Matches(COperator *pop) const
 	}
 
 	CPhysicalTableScan *popTableScan = CPhysicalTableScan::PopConvert(pop);
-	return m_ptabdesc->MDId()->Equals(popTableScan->Ptabdesc()->MDId()) &&
+	return ExecEngine() == popTableScan->ExecEngine() &&
+		   m_ptabdesc->MDId()->Equals(popTableScan->Ptabdesc()->MDId()) &&
 		   m_pdrgpcrOutput->Equals(popTableScan->PdrgpcrOutput());
 }
 
