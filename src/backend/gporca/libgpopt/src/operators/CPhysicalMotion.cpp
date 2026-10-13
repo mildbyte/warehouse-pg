@@ -11,6 +11,8 @@
 
 #include "gpopt/operators/CPhysicalMotion.h"
 
+#include "gpopt/base/CUtils.h"
+
 #include "gpos/base.h"
 
 #include "gpopt/base/CDistributionSpecAny.h"
@@ -44,6 +46,16 @@ CPhysicalMotion::FValidContext(CMemoryPool *, COptimizationContext *poc,
 	CDrvdPropPlan *pdpplanChild = pccBest->Pdpplan();
 	CPartitionPropagationSpec *pps_req = poc->Prpp()->Pepp()->PppsRequired();
 	if (pdpplanChild->Ppps()->IsUnsupportedPartSelector(pps_req))
+	{
+		return false;
+	}
+
+	// Over replicated input, a redistribution becomes a local hash filter
+	// (duplicate-sensitive motion), which an Arrow motion cannot express.
+	// The enforcer only checked the group expression that added it.
+	if (EeeArrow == ExecEngine() &&
+		COperator::EopPhysicalMotionHashDistribute == Eopid() &&
+		CUtils::FDuplicateHazardDistributionSpec(pdpplanChild->Pds()))
 	{
 		return false;
 	}
