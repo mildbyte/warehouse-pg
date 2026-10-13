@@ -5,6 +5,9 @@
 #include "gpopt/base/CExecEngine.h"
 
 #include "gpopt/base/COrderSpec.h"
+#include "gpopt/base/CWindowFrame.h"
+#include "gpopt/operators/CLogicalSequenceProject.h"
+#include "gpopt/operators/CScalarWindowFunc.h"
 
 #include "gpopt/base/CDistributionSpecHashed.h"
 #include "gpopt/base/CDistributionSpecReplicated.h"
@@ -173,6 +176,73 @@ CArrowEngineUtils::FOrderSupported(COrderSpec *pos)
 	return true;
 }
 
+// DataFusion evaluates every window of one node over the same sorted input
+// and finds peers with each window's own keys, so the first spec (which
+// Orca sorts by) must start with every other spec. RANGE and GROUPS offsets
+// need PG's type-specific in_range functions, and frame exclusion has no
+// DataFusion counterpart.
+BOOL
+CArrowEngineUtils::FWindowSupported(CLogicalSequenceProject *pop)
+{
+	COrderSpecArray *pdrgpos = pop->Pdrgpos();
+	CWindowFrameArray *pdrgpwf = pop->Pdrgpwf();
+	if (!FEnabled(EaopWindow))
+	{
+		return false;
+	}
+	for (ULONG ul = 0; ul < pdrgpos->Size(); ul++)
+	{
+		COrderSpec *pos = (*pdrgpos)[ul];
+		if (!pos->IsEmpty() && !FOrderSupported(pos))
+		{
+			return false;
+		}
+		if (0 < ul && !(*pdrgpos)[0]->FSatisfies(pos))
+		{
+			return false;
+		}
+	}
+	for (ULONG ul = 0; ul < pdrgpwf->Size(); ul++)
+	{
+		CWindowFrame *pwf = (*pdrgpwf)[ul];
+		if (CWindowFrame::IsEmpty(pwf))
+		{
+			continue;
+		}
+		if (CWindowFrame::EfesNone != pwf->Efes() &&
+			CWindowFrame::EfesNulls != pwf->Efes())
+		{
+			return false;
+		}
+		CWindowFrame::EFrameBoundary bounds[] = {pwf->EfbLeading(),
+												 pwf->EfbTrailing()};
+		CExpression *values[] = {pwf->PexprLeading(), pwf->PexprTrailing()};
+		for (ULONG edge = 0; edge < 2; edge++)
+		{
+			switch (bounds[edge])
+			{
+				case CWindowFrame::EfbUnboundedPreceding:
+				case CWindowFrame::EfbUnboundedFollowing:
+				case CWindowFrame::EfbCurrentRow:
+					break;
+				case CWindowFrame::EfbBoundedPreceding:
+				case CWindowFrame::EfbBoundedFollowing:
+					if (CWindowFrame::EfsRows != pwf->Efs() ||
+						nullptr == values[edge] ||
+						COperator::EopScalarConst !=
+							values[edge]->Pop()->Eopid())
+					{
+						return false;
+					}
+					break;
+				default:
+					return false;
+			}
+		}
+	}
+	return true;
+}
+
 BOOL
 CArrowEngineUtils::FScalarSupported(CExpression *pexpr)
 {
@@ -299,6 +369,20 @@ CArrowEngineUtils::FScalarSupported(CExpression *pexpr)
 			IMDId *func = popCast->FuncMdId();
 			if (nullptr != func && func->IsValid() &&
 				!FAsk(EacFunction, func))
+			{
+				return false;
+			}
+			break;
+		}
+
+		case COperator::EopScalarWindowFunc:
+		{
+			CScalarWindowFunc *popWin = CScalarWindowFunc::PopConvert(pop);
+			if (popWin->IsDistinct() ||
+				CScalarWindowFunc::EwsImmediate != popWin->Ews() ||
+				!FAsk(popWin->FAgg() ? EacAggregate : EacWindowFunc,
+					  popWin->FuncMdId()) ||
+				!FAsk(EacType, popWin->MdidType()))
 			{
 				return false;
 			}

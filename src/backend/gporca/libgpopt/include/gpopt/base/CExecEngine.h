@@ -69,7 +69,8 @@ enum EArrowCapability
 	EacFunction,	   // function oid
 	EacAggregate,	   // single-stage aggregate oid
 	EacAggregateSplit,	// aggregate oid whose partial state is a plain value
-	EacMotionKey		// type oid the engine can hash like cdbhash
+	EacMotionKey,		// type oid the engine can hash like cdbhash
+	EacWindowFunc		// window-only function oid (aggregates ask EacAggregate)
 };
 
 // mirrors OrcaEngineOp
@@ -82,7 +83,8 @@ enum EArrowOp
 	EaopComputeScalar,
 	EaopFilter,
 	EaopSort,  // sort enforcers and limits
-	EaopMotion	// motions that ship Arrow batches
+	EaopMotion,	 // motions that ship Arrow batches
+	EaopWindow
 };
 
 using FnArrowCapability = BOOL (*)(EArrowCapability kind, ULONG oid);
@@ -105,6 +107,7 @@ extern SArrowEngineConfig g_arrow_engine;
 
 class COrderSpec;
 class CExpressionHandle;
+class CLogicalSequenceProject;
 
 class CArrowEngineUtils
 {
@@ -130,6 +133,10 @@ public:
 
 	// whether a sort on the given keys can run in Arrow
 	static BOOL FOrderSupported(COrderSpec *pos);
+
+	// whether the engine can evaluate these window specs over input sorted
+	// by the first one
+	static BOOL FWindowSupported(CLogicalSequenceProject *pop);
 
 	// Arrow twin of a motion enforcer placed over the expression exprhdl
 	// describes, or null when the motion can't ship Arrow batches

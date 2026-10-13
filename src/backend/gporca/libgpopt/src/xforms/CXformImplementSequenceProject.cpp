@@ -15,6 +15,7 @@
 
 #include "gpopt/operators/CLogicalSequenceProject.h"
 #include "gpopt/operators/CPatternLeaf.h"
+#include "gpopt/base/CExecEngine.h"
 #include "gpopt/operators/CPhysicalSequenceProject.h"
 
 
@@ -86,6 +87,23 @@ CXformImplementSequenceProject::Transform(CXformContext *pxfctxt,
 
 	// add alternative to results
 	pxfres->Add(pexprSequenceProject);
+
+	if (CArrowEngineUtils::FWindowSupported(popLogicalSequenceProject) &&
+		CArrowEngineUtils::FScalarSupported(pexprScalar) &&
+		CArrowEngineUtils::FColsSupported(
+			(*pexpr)[1]->DeriveDefinedColumns()))
+	{
+		pexprRelational->AddRef();
+		pexprScalar->AddRef();
+		pds->AddRef();
+		pdrgpos->AddRef();
+		pdrgpwf->AddRef();
+		CPhysicalSequenceProject *popArrow =
+			GPOS_NEW(mp) CPhysicalSequenceProject(mp, pds, pdrgpos, pdrgpwf);
+		popArrow->SetExecEngine(EeeArrow);
+		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popArrow, pexprRelational,
+											 pexprScalar));
+	}
 }
 
 

@@ -2501,6 +2501,9 @@ CCostModelGPDB::Cost(
 			case COperator::EopPhysicalMotionHashDistribute:
 				op = EaopMotion;
 				break;
+			case COperator::EopPhysicalSequenceProject:
+				op = EaopWindow;
+				break;
 			default:
 				op = EaopHashAgg;
 		}

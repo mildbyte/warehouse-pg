@@ -44,7 +44,8 @@ typedef enum OrcaEngineAsk
 	ORCA_ENGINE_ASK_FUNCTION,
 	ORCA_ENGINE_ASK_AGG,		/* single-stage aggregate */
 	ORCA_ENGINE_ASK_AGG_SPLIT,	/* aggregate whose partial state is a plain value */
-	ORCA_ENGINE_ASK_MOTION_KEY	/* type the engine hashes exactly like cdbhash */
+	ORCA_ENGINE_ASK_MOTION_KEY,	/* type the engine hashes exactly like cdbhash */
+	ORCA_ENGINE_ASK_WINDOW_FUNC	/* window-only function */
 } OrcaEngineAsk;
 
 typedef enum OrcaEngineOp
@@ -56,7 +57,8 @@ typedef enum OrcaEngineOp
 	ORCA_ENGINE_OP_COMPUTE_SCALAR,
 	ORCA_ENGINE_OP_FILTER,
 	ORCA_ENGINE_OP_SORT,
-	ORCA_ENGINE_OP_MOTION		/* motion shipping engine batches */
+	ORCA_ENGINE_OP_MOTION,		/* motion shipping engine batches */
+	ORCA_ENGINE_OP_WINDOW
 } OrcaEngineOp;
 
 /*

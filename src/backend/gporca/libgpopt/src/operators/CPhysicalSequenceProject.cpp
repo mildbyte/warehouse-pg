@@ -209,7 +209,8 @@ CPhysicalSequenceProject::Matches(COperator *pop) const
 	{
 		CPhysicalSequenceProject *popPhysicalSequenceProject =
 			CPhysicalSequenceProject::PopConvert(pop);
-		return m_pds->Matches(popPhysicalSequenceProject->Pds()) &&
+		return ExecEngine() == popPhysicalSequenceProject->ExecEngine() &&
+			   m_pds->Matches(popPhysicalSequenceProject->Pds()) &&
 			   CWindowFrame::Equals(m_pdrgpwf,
 									popPhysicalSequenceProject->Pdrgpwf()) &&
 			   COrderSpec::Equals(m_pdrgpos,
