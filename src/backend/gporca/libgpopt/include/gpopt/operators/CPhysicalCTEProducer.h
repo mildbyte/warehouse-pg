@@ -79,6 +79,20 @@ public:
 	// match function
 	BOOL Matches(COperator *pop) const override;
 
+	// An Arrow producer shares the IPC batches of the island below it, so
+	// consumers read them back as Arrow; to its parent it yields no rows
+	EExecEngine
+	EeRequired(CExpressionHandle &, ULONG) const override
+	{
+		return EeeArrow == ExecEngine() ? EeeArrowNative : ExecEngine();
+	}
+
+	EExecEngine
+	EeDerive(CExpressionHandle &) const override
+	{
+		return EeePG;
+	}
+
 	// sensitivity to order of inputs
 	BOOL
 	FInputOrderSensitive() const override

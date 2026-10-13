@@ -2499,6 +2499,7 @@ CCostModelGPDB::Cost(
 			case COperator::EopPhysicalMotionGather:
 			case COperator::EopPhysicalMotionBroadcast:
 			case COperator::EopPhysicalMotionHashDistribute:
+			case COperator::EopPhysicalCTEProducer:
 				op = EaopMotion;
 				break;
 			case COperator::EopPhysicalSequenceProject:

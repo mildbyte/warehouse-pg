@@ -15,6 +15,7 @@
 
 #include "gpopt/operators/CLogicalCTEProducer.h"
 #include "gpopt/operators/CPatternLeaf.h"
+#include "gpopt/base/CExecEngine.h"
 #include "gpopt/operators/CPhysicalCTEProducer.h"
 
 using namespace gpopt;
@@ -91,6 +92,19 @@ CXformImplementCTEProducer::Transform(CXformContext *pxfctxt,
 
 	// add alternative to transformation result
 	pxfres->Add(pexprAlt);
+
+	CColRefSet *pcrs = GPOS_NEW(mp) CColRefSet(mp, colref_array);
+	if (CArrowEngineUtils::FEnabled(EaopMotion) &&
+		CArrowEngineUtils::FColsSupported(pcrs))
+	{
+		colref_array->AddRef();
+		pexprChild->AddRef();
+		CPhysicalCTEProducer *popArrow =
+			GPOS_NEW(mp) CPhysicalCTEProducer(mp, id, colref_array);
+		popArrow->SetExecEngine(EeeArrow);
+		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popArrow, pexprChild));
+	}
+	pcrs->Release();
 }
 
 // EOF

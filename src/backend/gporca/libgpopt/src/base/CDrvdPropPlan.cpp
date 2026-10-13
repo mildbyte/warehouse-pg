@@ -137,6 +137,9 @@ CDrvdPropPlan::CopyCTEProducerPlanProps(CMemoryPool *mp, CDrvdPropCtxt *pdpctxt,
 		// we add-ref producer's properties directly
 		pdpplan->Prs()->AddRef();
 		m_prs = pdpplan->Prs();
+		// consumers read what the producer's input shares: rows, or the IPC
+		// batches of an Arrow producer
+		m_ee = pdpplan->Ee();
 
 		// no need to copy the part index map. return an empty one. This is to
 		// distinguish between a CTE consumer and the inlined expression

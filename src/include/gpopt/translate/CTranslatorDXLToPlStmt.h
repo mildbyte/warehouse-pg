@@ -351,6 +351,9 @@ private:
 		const CDXLNode *island_dxlnode, CDXLTranslateContext *output_context,
 		CDXLTranslationContextArray *ctxt_translation_prev_siblings);
 
+	// targetlist of (segment, payload) rows referencing varno
+	static List *ArrowIpcTargetList(Index varno);
+
 	void TranslateDXLArrowMotion(const CDXLNode *motion_dxlnode,
 								 const CDXLNode *island_dxlnode,
 								 CustomScan *island, Motion *motion);
@@ -446,9 +449,8 @@ private:
 	Plan *TranslateDXLCTEConsumerToSharedScan(
 		const CDXLNode *cte_consumer_dxlnode,
 		CDXLTranslateContext *output_context,
-		CDXLTranslationContextArray *
-			ctxt_translation_prev_siblings	// translation contexts of previous siblings
-	);
+		CDXLTranslationContextArray *ctxt_translation_prev_siblings,
+		BOOL ipc = false);
 
 	// translate a (dynamic) bitmap table scan operator
 	Plan *TranslateDXLBitmapTblScan(

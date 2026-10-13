@@ -785,6 +785,24 @@ CTranslatorDXLToPlStmt::TranslateDXLArrowMotion(const CDXLNode *motion_dxlnode,
 		gpdb::LAppend(island->custom_private, gpdb::MakeStringValue(PStrDup(route.c_str())));
 }
 
+List *
+CTranslatorDXLToPlStmt::ArrowIpcTargetList(Index varno)
+{
+	const Oid types[] = {INT4OID, BYTEAOID};
+	const char *names[] = {ARROW_MOTION_SEGID_COL, ARROW_MOTION_PAYLOAD_COL};
+	List *target_list = NIL;
+	for (ULONG ul = 0; ul < 2; ul++)
+	{
+		TargetEntry *te = MakeNode(TargetEntry);
+		te->expr =
+			(Expr *) gpdb::MakeVar(varno, (AttrNumber)(ul + 1), types[ul], -1, 0);
+		te->resno = (AttrNumber)(ul + 1);
+		te->resname = PStrDup(names[ul]);
+		target_list = gpdb::LAppend(target_list, te);
+	}
+	return target_list;
+}
+
 void
 CTranslatorDXLToPlStmt::CollectArrowIslandLeaves(
 	const CDXLNode *dxlnode, CDXLTranslateContext *output_context,
@@ -796,9 +814,16 @@ CTranslatorDXLToPlStmt::CollectArrowIslandLeaves(
 		GPOS_ASSERT(CDXLPhysicalEngineConvert::Cast(dxlop)->IsToArrow());
 		CDXLTranslateContext child_context(
 			m_mp, false, output_context->GetColIdToParamIdMap());
-		Plan *leaf = TranslateDXLOperatorToPlan(
-			(*dxlnode)[EdxlengineconvertIndexChild], &child_context,
-			ctxt_translation_prev_siblings);
+		const CDXLNode *child = (*dxlnode)[EdxlengineconvertIndexChild];
+		Plan *leaf =
+			CDXLPhysicalEngineConvert::Cast(dxlop)->IsIpc() &&
+					EdxlopPhysicalCTEConsumer ==
+						child->GetOperator()->GetDXLOperator()
+				? TranslateDXLCTEConsumerToSharedScan(
+					  child, &child_context, ctxt_translation_prev_siblings,
+					  true /*ipc*/)
+				: TranslateDXLOperatorToPlan(child, &child_context,
+											 ctxt_translation_prev_siblings);
 		*leaves = gpdb::LAppend(*leaves, leaf);
 		return;
 	}
@@ -4360,11 +4385,24 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEProducerToSharedScan(
 	CDXLTranslationContextArray *child_contexts =
 		GPOS_NEW(m_mp) CDXLTranslationContextArray(m_mp);
 	child_contexts->Append(&child_context);
-	// translate proj list
-	plan->targetlist =
-		TranslateDXLProjList(project_list_dxlnode,
-							 nullptr,  // base table translation context
-							 child_contexts, output_context);
+	if (EdxlopPhysicalEngineConvert ==
+		child_dxlnode->GetOperator()->GetDXLOperator())
+	{
+		// an Arrow producer shares the (segment, payload) rows of its island
+		GPOS_ASSERT(IsA(child_plan, CustomScan));
+		plan->targetlist = ArrowIpcTargetList(OUTER_VAR);
+		CustomScan *island = (CustomScan *) child_plan;
+		island->custom_private = gpdb::LAppend(
+			island->custom_private, gpdb::MakeStringValue(PStrDup("gather")));
+	}
+	else
+	{
+		// translate proj list
+		plan->targetlist =
+			TranslateDXLProjList(project_list_dxlnode,
+								 nullptr,  // base table translation context
+								 child_contexts, output_context);
+	}
 
 	plan->lefttree = child_plan;
 	plan->qual = NIL;
@@ -4387,7 +4425,7 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEProducerToSharedScan(
 Plan *
 CTranslatorDXLToPlStmt::TranslateDXLCTEConsumerToSharedScan(
 	const CDXLNode *cte_consumer_dxlnode, CDXLTranslateContext *output_context,
-	CDXLTranslationContextArray *ctxt_translation_prev_siblings)
+	CDXLTranslationContextArray *ctxt_translation_prev_siblings, BOOL ipc)
 {
 	CDXLPhysicalCTEConsumer *cte_consumer_dxlop =
 		CDXLPhysicalCTEConsumer::Cast(cte_consumer_dxlnode->GetOperator());
@@ -4408,10 +4446,12 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEConsumerToSharedScan(
 		cte_consumer_dxlop->GetOutputColIdsArray();
 #endif
 
-	// generate the target list of the CTE Consumer
-	plan->targetlist = NIL;
+	// generate the target list of the CTE Consumer; the consumer of an
+	// Arrow producer reads its (segment, payload) rows
+	plan->targetlist = ipc ? ArrowIpcTargetList(OUTER_VAR) : NIL;
 	CDXLNode *project_list_dxlnode = (*cte_consumer_dxlnode)[0];
-	const ULONG num_of_proj_list_elem = project_list_dxlnode->Arity();
+	const ULONG num_of_proj_list_elem =
+		ipc ? 0 : project_list_dxlnode->Arity();
 	GPOS_ASSERT(num_of_proj_list_elem == output_colids_array->Size());
 	for (ULONG ul = 0; ul < num_of_proj_list_elem; ul++)
 	{

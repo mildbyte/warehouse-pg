@@ -2398,12 +2398,27 @@ CTranslatorExprToDXL::PdxlnCTEProducer(
 	CColRefSet *pcrsOutput = GPOS_NEW(m_mp) CColRefSet(m_mp);
 	pcrsOutput->Include(pdrgpcrRequired);
 
-	// translate relational child expression
+	const BOOL fArrow = EeeArrow == popCTEProducer->ExecEngine();
+
+	// translate relational child expression; an Arrow child must not get a
+	// remapping Result on top
 	CDXLNode *child_dxlnode = CreateDXLNode(
 		pexprRelational, pdrgpcrRequired, pdrgpdsBaseTables,
-		pulNonGatherMotions, pfDML, true /*fRemap*/, false /*fRoot */);
+		pulNonGatherMotions, pfDML, !fArrow /*fRemap*/, false /*fRoot */);
 
 	CDXLNode *pdxlnPrL = PdxlnProjList(pcrsOutput, pdrgpcrRequired);
+
+	// An Arrow producer shares the IPC batches of the island below it, with
+	// columns in the producer's order, which consumers decode by position.
+	if (fArrow)
+	{
+		CDXLNode *pdxlnSend = GPOS_NEW(m_mp) CDXLNode(
+			m_mp, GPOS_NEW(m_mp) CDXLPhysicalEngineConvert(m_mp, false, true));
+		pdxlnSend->SetProperties(GetProperties(pexprRelational));
+		pdxlnSend->AddChild(PdxlnProjList(pcrsOutput, pdrgpcrRequired));
+		pdxlnSend->AddChild(child_dxlnode);
+		child_dxlnode = pdxlnSend;
+	}
 	pcrsOutput->Release();
 
 	CDXLNode *pdxlnCTEProducer = GPOS_NEW(m_mp) CDXLNode(
@@ -2456,9 +2471,20 @@ CTranslatorExprToDXL::PdxlnCTEConsumer(
 		m_mp, GPOS_NEW(m_mp) CDXLPhysicalCTEConsumer(m_mp, ulCTEId, colids),
 		pdxlnPrL);
 
-	pcrsOutput->Release();
-
 	pdxlnCTEConsumer->SetProperties(dxl_properties);
+
+	// the consumer of an Arrow producer reads IPC batches, which the island
+	// above decodes
+	if (EeeArrow == CDrvdPropPlan::Pdpplan(pexprCTEConsumer->PdpDerive())->Ee())
+	{
+		CDXLNode *pdxlnRecv = GPOS_NEW(m_mp) CDXLNode(
+			m_mp, GPOS_NEW(m_mp) CDXLPhysicalEngineConvert(m_mp, true, true));
+		pdxlnRecv->SetProperties(GetProperties(pexprCTEConsumer));
+		pdxlnRecv->AddChild(PdxlnProjList(pcrsOutput, colref_array));
+		pdxlnRecv->AddChild(pdxlnCTEConsumer);
+		pdxlnCTEConsumer = pdxlnRecv;
+	}
+	pcrsOutput->Release();
 
 	return pdxlnCTEConsumer;
 }

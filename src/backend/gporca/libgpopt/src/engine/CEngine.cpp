@@ -556,9 +556,12 @@ CEngine::FOptimizeChild(
 	// context would redo that work per required-property set (6.6x the jobs
 	// on TPC-H Q02), so add the group's conversion, which every context
 	// shares, and skip the operator. Only conversions derive an engine other
-	// than their operator's.
+	// than their operator's, and CTE producers and consumers, whose engine is
+	// that of the producer's input.
 	if (popChild->FPhysical() &&
 		COperator::EopPhysicalEngineConvert != popChild->Eopid() &&
+		COperator::EopPhysicalCTEProducer != popChild->Eopid() &&
+		COperator::EopPhysicalCTEConsumer != popChild->Eopid() &&
 		CPhysical::PopConvert(popChild)->ExecEngine() !=
 			EeBase(pocChild->Prpp()->Ee()))
 	{
