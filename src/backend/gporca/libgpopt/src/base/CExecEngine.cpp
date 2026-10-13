@@ -11,6 +11,8 @@
 #include "gpopt/base/CDrvdPropPlan.h"
 #include "gpopt/base/CUtils.h"
 #include "gpopt/operators/CExpressionHandle.h"
+#include "gpopt/operators/CPhysicalJoin.h"
+#include "gpopt/base/CCastUtils.h"
 #include "gpopt/operators/CPhysicalMotionBroadcast.h"
 #include "gpopt/operators/CPhysicalMotionGather.h"
 #include "gpopt/operators/CPhysicalMotionHashDistribute.h"
@@ -103,6 +105,41 @@ CArrowEngineUtils::FLargeEnough(CExpression *pexpr)
 	return !known;
 }
 
+CExpression *
+CArrowEngineUtils::PexprScalarTree(CExpression *pexprScalar)
+{
+	CGroupExpression *pgexpr = pexprScalar->Pgexpr();
+	if (nullptr == pgexpr || pgexpr->Arity() == pexprScalar->Arity())
+	{
+		return pexprScalar;
+	}
+	CGroup *pgroup = pgexpr->Pgroup();
+	return pgroup->FScalarRepIsExact() ? pgroup->PexprScalarRep() : nullptr;
+}
+
+BOOL
+CArrowEngineUtils::FHashJoinable(CMemoryPool *mp, CExpression *pexprJoin,
+								 CExpression *pexprScalarTree)
+{
+	// same preconditions as CXformUtils::ImplementHashJoin
+	if (CUtils::HasOuterRefs(pexprJoin))
+	{
+		return false;
+	}
+	CExpression *pexprOuter = (*pexprJoin)[0];
+	CExpression *pexprInner = (*pexprJoin)[1];
+	CExpressionArray *pdrgpexpr =
+		CCastUtils::PdrgpexprCastEquality(mp, pexprScalarTree);
+	BOOL found = false;
+	for (ULONG ul = 0; !found && ul < pdrgpexpr->Size(); ul++)
+	{
+		found = CPhysicalJoin::FHashJoinCompatible((*pdrgpexpr)[ul], pexprOuter,
+												   pexprInner);
+	}
+	pdrgpexpr->Release();
+	return found;
+}
+
 BOOL
 CArrowEngineUtils::FColsSupported(CColRefSet *pcrs)
 {
@@ -142,15 +179,10 @@ CArrowEngineUtils::FScalarSupported(CExpression *pexpr)
 
 	// Xforms binding the scalar child to a pattern leaf see only its top
 	// operator; check the group's full scalar expression instead.
-	CGroupExpression *pgexpr = pexpr->Pgexpr();
-	if (nullptr != pgexpr && pgexpr->Arity() != pexpr->Arity())
+	CExpression *pexprTree = PexprScalarTree(pexpr);
+	if (pexprTree != pexpr)
 	{
-		CGroup *pgroup = pgexpr->Pgroup();
-		if (!pgroup->FScalarRepIsExact() || nullptr == pgroup->PexprScalarRep())
-		{
-			return false;
-		}
-		return FScalarSupported(pgroup->PexprScalarRep());
+		return nullptr != pexprTree && FScalarSupported(pexprTree);
 	}
 
 	COperator *pop = pexpr->Pop();

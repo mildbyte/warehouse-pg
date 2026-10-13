@@ -549,6 +549,37 @@ CEngine::FOptimizeChild(
 
 	COperator *popChild = pgexprChild->Pop();
 
+	// An operator whose output engine differs from the requested one can
+	// only be the input of a conversion: under a native request nothing may
+	// convert it, and otherwise the plan is the group's conversion over the
+	// native context of the other engine. Optimizing the operator under this
+	// context would redo that work per required-property set (6.6x the jobs
+	// on TPC-H Q02), so add the group's conversion, which every context
+	// shares, and skip the operator. Only conversions derive an engine other
+	// than their operator's.
+	if (popChild->FPhysical() &&
+		COperator::EopPhysicalEngineConvert != popChild->Eopid() &&
+		CPhysical::PopConvert(popChild)->ExecEngine() !=
+			EeBase(pocChild->Prpp()->Ee()))
+	{
+		CReqdPropPlan *prpp = pocChild->Prpp();
+		if (!FEeNative(prpp->Ee()) &&
+			CArrowEngineUtils::FColsSupported(prpp->PcrsRequired()))
+		{
+			CBinding binding;
+			CExpression *pexpr = binding.PexprExtract(
+				m_mp, pgexprChild, m_pexprEnforcerPattern, nullptr /* pexprLast */);
+			CExpressionArray *pdrgpexpr = GPOS_NEW(m_mp) CExpressionArray(m_mp);
+			pdrgpexpr->Append(GPOS_NEW(m_mp) CExpression(
+				m_mp,
+				GPOS_NEW(m_mp) CPhysicalEngineConvert(m_mp, EeBase(prpp->Ee())),
+				pexpr));
+			AddEnforcers(pgexprChild, pdrgpexpr);
+			pdrgpexpr->Release();
+		}
+		return false;
+	}
+
 	if (nullptr != pgexprParent &&
 		COperator::EopPhysicalSort == pgexprParent->Pop()->Eopid() &&
 		COperator::EopPhysicalMotionGather == popChild->Eopid())
@@ -2387,21 +2418,6 @@ CEngine::FCheckReqdProps(CExpressionHandle &exprhdl, CReqdPropPlan *prpp,
 
 	if (FEeNative(prpp->Ee()) &&
 		COperator::EopPhysicalEngineConvert == op_id)
-	{
-		return false;
-	}
-
-	// Under an Arrow request a PG operator can only be the input of a
-	// ToArrow, and it is FCheckEnfdProps on that operator that adds the
-	// ToArrow. Rejecting non-producers here saves planning time, but then a
-	// context only sees a ToArrow if another context happened to add one to
-	// the group before it was optimized, so plans depend on job order.
-	static const BOOL fLeavesOnly = nullptr != std::getenv("ORCA_ARROW_LEAVES_ONLY");
-	if (fLeavesOnly && EeeArrow == EeBase(prpp->Ee()) &&
-		EeePG == popPhysical->ExecEngine() &&
-		COperator::EopPhysicalEngineConvert != op_id &&
-		!CUtils::FPhysicalScan(popPhysical) &&
-		!CUtils::FPhysicalMotion(popPhysical))
 	{
 		return false;
 	}

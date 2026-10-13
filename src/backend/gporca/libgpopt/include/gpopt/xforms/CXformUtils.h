@@ -614,14 +614,20 @@ CXformUtils::TransformImplementBinaryOp(CXformContext *pxfctxt,
 				COperator::EopPhysicalLeftAntiSemiNLJoinNotIn == op_id);
 
 	// Arrow twin: DataFusion collects the inner side once, so neither
-	// correlated inner sides nor NOT IN semantics are expressible
+	// correlated inner sides nor NOT IN semantics are expressible. A join
+	// with a hash-joinable conjunct also gets an Arrow hash join, which
+	// always beats DataFusion's NLJ; the NLJ twin would only grow the
+	// search (Q02 planning time 4x).
 	COperator::EOperatorId eopidNL = pexprBinary->Pop()->Eopid();
+	CExpression *pexprScalarTree =
+		CArrowEngineUtils::PexprScalarTree(pexprScalar);
 	if (COperator::EopPhysicalLeftAntiSemiNLJoinNotIn != eopidNL &&
-		!CUtils::HasOuterRefs(pexprRight) &&
+		nullptr != pexprScalarTree && !CUtils::HasOuterRefs(pexprRight) &&
 		CArrowEngineUtils::FEnabled(EaopHashJoin) &&
+		!CArrowEngineUtils::FHashJoinable(mp, pexpr, pexprScalarTree) &&
 		CArrowEngineUtils::FLargeEnough(pexpr) &&
 		CArrowEngineUtils::FColsSupported(pexprScalar->DeriveUsedColumns()) &&
-		CArrowEngineUtils::FScalarSupported(pexprScalar))
+		CArrowEngineUtils::FScalarSupported(pexprScalarTree))
 	{
 		pexprLeft->AddRef();
 		pexprRight->AddRef();

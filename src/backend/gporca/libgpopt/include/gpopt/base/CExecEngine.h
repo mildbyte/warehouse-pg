@@ -114,6 +114,14 @@ public:
 	// whether some relational child is big enough to be worth an engine switch
 	static BOOL FLargeEnough(CExpression *pexpr);
 
+	// the full tree of a scalar bound by a pattern leaf, or null if the
+	// group has no exact representative
+	static CExpression *PexprScalarTree(CExpression *pexprScalar);
+
+	// would the hash join xforms implement this logical join as well
+	static BOOL FHashJoinable(CMemoryPool *mp, CExpression *pexprJoin,
+							  CExpression *pexprScalarTree);
+
 	// whether every scalar node under the expression can run in Arrow
 	static BOOL FScalarSupported(CExpression *pexprScalar);
 
