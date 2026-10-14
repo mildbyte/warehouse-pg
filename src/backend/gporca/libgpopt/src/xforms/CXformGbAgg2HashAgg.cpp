@@ -83,6 +83,41 @@ CXformGbAgg2HashAgg::Exfp(CExpressionHandle &exprhdl) const
 	return CXform::ExfpHigh;
 }
 
+// The engine's hash aggregate also evaluates the aggregates FApplicable
+// rules out for PG, such as DISTINCT ones.
+static void
+AddEngineHashAgg(CMemoryPool *mp, CXformResult *pxfres, CExpression *pexpr)
+{
+	CLogicalGbAgg *popAgg = CLogicalGbAgg::PopConvert(pexpr->Pop());
+	if (COperator::EgbaggtypeIntermediate == popAgg->Egbaggtype() ||
+		!CExternalEngineUtils::FEnabled(EeopHashAgg) ||
+		!CExternalEngineUtils::FLargeEnough(pexpr) ||
+		!CExternalEngineUtils::FColsSupported(pexpr->DeriveOutputColumns()) ||
+		!CExternalEngineUtils::FScalarSupported((*pexpr)[1]))
+	{
+		return;
+	}
+	CColRefArray *pdrgpcrArgDQA = popAgg->PdrgpcrArgDQA();
+	if (nullptr != pdrgpcrArgDQA && 0 == pdrgpcrArgDQA->Size())
+	{
+		pdrgpcrArgDQA = nullptr;
+	}
+	if (nullptr != pdrgpcrArgDQA)
+	{
+		pdrgpcrArgDQA->AddRef();
+	}
+	popAgg->Pdrgpcr()->AddRef();
+	CExternalEngineUtils::AddAlternative(
+		mp, pxfres,
+		GPOS_NEW(mp) CPhysicalHashAgg(
+			mp, popAgg->Pdrgpcr(), popAgg->PdrgpcrMinimal(),
+			popAgg->Egbaggtype(), popAgg->FGeneratesDuplicates(), pdrgpcrArgDQA,
+			CXformUtils::FMultiStageAgg(pexpr),
+			CXformUtils::FAggGenBySplitDQAXform(pexpr), popAgg->AggStage(),
+			!CXformUtils::FLocalAggCreatedByEagerAggXform(pexpr)),
+		pexpr);
+}
+
 //---------------------------------------------------------------------------
 //	@function:
 //		CXformGbAgg2HashAgg::Transform
@@ -103,64 +138,47 @@ CXformGbAgg2HashAgg::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	// hash agg is not used if agg function does not have prelim func
 	// hash agg is not used for ordered aggregate
 	// evaluating these conditions needs a deep tree in the project list
-	// (the engine's hash aggregate does evaluate DISTINCT aggregates, so the
-	// Engine alternative below is still offered)
-	BOOL fPG = FApplicable(pexpr);
+	if (!FApplicable(pexpr))
+	{
+		AddEngineHashAgg(pxfctxt->Pmp(), pxfres, pexpr);
+		return;
+	}
 
 	CMemoryPool *mp = pxfctxt->Pmp();
 	CLogicalGbAgg *popAgg = CLogicalGbAgg::PopConvert(pexpr->Pop());
 	CColRefArray *colref_array = popAgg->Pdrgpcr();
+	colref_array->AddRef();
 
 	// extract components
 	CExpression *pexprRel = (*pexpr)[0];
 	CExpression *pexprScalar = (*pexpr)[1];
 
+	// addref children
+	pexprRel->AddRef();
+	pexprScalar->AddRef();
+
 	CColRefArray *pdrgpcrArgDQA = popAgg->PdrgpcrArgDQA();
-	if (fPG)
+	if (pdrgpcrArgDQA != nullptr && 0 != pdrgpcrArgDQA->Size())
 	{
-		colref_array->AddRef();
-		pexprRel->AddRef();
-		pexprScalar->AddRef();
-		if (pdrgpcrArgDQA != nullptr && 0 != pdrgpcrArgDQA->Size())
-		{
-			pdrgpcrArgDQA->AddRef();
-		}
-
-		// create alternative expression
-		CExpression *pexprAlt = GPOS_NEW(mp) CExpression(
-			mp,
-			GPOS_NEW(mp) CPhysicalHashAgg(
-				mp, colref_array, popAgg->PdrgpcrMinimal(),
-				popAgg->Egbaggtype(), popAgg->FGeneratesDuplicates(),
-				pdrgpcrArgDQA, CXformUtils::FMultiStageAgg(pexpr),
-				CXformUtils::FAggGenBySplitDQAXform(pexpr), popAgg->AggStage(),
-				!CXformUtils::FLocalAggCreatedByEagerAggXform(pexpr)),
-			pexprRel, pexprScalar);
-
-		// add alternative to transformation result
-		pxfres->Add(pexprAlt);
+		GPOS_ASSERT(nullptr != pdrgpcrArgDQA);
+		pdrgpcrArgDQA->AddRef();
 	}
 
-	BOOL fDQA = nullptr != pdrgpcrArgDQA && 0 != pdrgpcrArgDQA->Size();
-	if (COperator::EgbaggtypeIntermediate != popAgg->Egbaggtype() &&
-		CExternalEngineUtils::FEnabled(EeopHashAgg) &&
-		CExternalEngineUtils::FLargeEnough(pexpr) &&
-		CExternalEngineUtils::FColsSupported(pexpr->DeriveOutputColumns()) &&
-		CExternalEngineUtils::FScalarSupported(pexprScalar))
-	{
-		colref_array->AddRef();
-		if (fDQA)
-		{
-			pdrgpcrArgDQA->AddRef();
-		}
-		CPhysicalHashAgg *popEngine = GPOS_NEW(mp) CPhysicalHashAgg(
+	// create alternative expression
+	CExpression *pexprAlt = GPOS_NEW(mp) CExpression(
+		mp,
+		GPOS_NEW(mp) CPhysicalHashAgg(
 			mp, colref_array, popAgg->PdrgpcrMinimal(), popAgg->Egbaggtype(),
-			popAgg->FGeneratesDuplicates(), fDQA ? pdrgpcrArgDQA : nullptr,
+			popAgg->FGeneratesDuplicates(), pdrgpcrArgDQA,
 			CXformUtils::FMultiStageAgg(pexpr),
 			CXformUtils::FAggGenBySplitDQAXform(pexpr), popAgg->AggStage(),
-			!CXformUtils::FLocalAggCreatedByEagerAggXform(pexpr));
-		CExternalEngineUtils::AddAlternative(mp, pxfres, popEngine, pexpr);
-	}
+			!CXformUtils::FLocalAggCreatedByEagerAggXform(pexpr)),
+		pexprRel, pexprScalar);
+
+	// add alternative to transformation result
+	pxfres->Add(pexprAlt);
+
+	AddEngineHashAgg(mp, pxfres, pexpr);
 }
 
 //---------------------------------------------------------------------------

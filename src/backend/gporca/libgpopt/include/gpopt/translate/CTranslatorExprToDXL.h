@@ -307,6 +307,11 @@ private:
 								 CDistributionSpecArray *pdrgpdsBaseTables,
 								 ULONG *pulNonGatherMotions, BOOL *pfDML);
 
+	CDXLNode *PdxlnEngineConvert(CDXLPhysicalProperties *dxl_properties,
+								 BOOL fToEngine, BOOL fIpc,
+								 CDXLNode *child_dxlnode,
+								 CDXLNode *proj_list_dxlnode);
+
 	CDXLNode *PdxlnMaterialize(CExpression *pexprSpool,
 							   CColRefArray *colref_array,
 							   CDistributionSpecArray *pdrgpdsBaseTables,

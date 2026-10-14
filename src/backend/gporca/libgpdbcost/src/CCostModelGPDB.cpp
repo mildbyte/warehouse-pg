@@ -2419,24 +2419,18 @@ CCostModelGPDB::Cost(
 		COptCtxt::PoctxtFromTLS()->GetOptimizerConfig()->GetExternalEngine();
 	GPOS_ASSERT(nullptr != engine);
 
-	const ICostModelParams *params = GetCostModelParams();
+	auto unit = [this](ULONG id) {
+		return GetCostModelParams()->PcpLookup(id)->Get().Get();
+	};
 	SEngineCostInput in;
 	in.m_sort_tup_width_unit =
-		params->PcpLookup(CCostModelParamsGPDB::EcpSortTupWidthCostUnit)
-			->Get()
-			.Get();
+		unit(CCostModelParamsGPDB::EcpSortTupWidthCostUnit);
 	in.m_join_feeding_tup_column_unit =
-		params->PcpLookup(CCostModelParamsGPDB::EcpJoinFeedingTupColumnCostUnit)
-			->Get()
-			.Get();
+		unit(CCostModelParamsGPDB::EcpJoinFeedingTupColumnCostUnit);
 	in.m_join_feeding_tup_width_unit =
-		params->PcpLookup(CCostModelParamsGPDB::EcpJoinFeedingTupWidthCostUnit)
-			->Get()
-			.Get();
+		unit(CCostModelParamsGPDB::EcpJoinFeedingTupWidthCostUnit);
 	in.m_join_output_tup_unit =
-		params->PcpLookup(CCostModelParamsGPDB::EcpJoinOutputTupCostUnit)
-			->Get()
-			.Get();
+		unit(CCostModelParamsGPDB::EcpJoinOutputTupCostUnit);
 	in.m_rebinds = pci->NumRebinds();
 	in.m_rows = pci->Rows();
 	in.m_width = pci->Width();

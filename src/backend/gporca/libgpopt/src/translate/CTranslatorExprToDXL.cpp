@@ -762,15 +762,9 @@ CTranslatorExprToDXL::PdxlnTblScan(CExpression *pexprTblScan,
 	// filter included, as the leaf of a conversion
 	if (EeeExternal == popTblScan->ExecEngine())
 	{
-		CDXLNode *dxlnode = GPOS_NEW(m_mp) CDXLNode(
-			m_mp, GPOS_NEW(m_mp) CDXLPhysicalEngineConvert(m_mp, true));
-		dxlnode->SetProperties(
-			CTranslatorExprToDXLUtils::PdxlpropCopy(m_mp, pdxlnTblScan));
-		dxlnode->AddChild(
-			CTranslatorExprToDXLUtils::PdxlnProjListFromChildProjList(
-				m_mp, m_pcf, m_phmcrdxln, (*pdxlnTblScan)[0]));
-		dxlnode->AddChild(pdxlnTblScan);
-		return dxlnode;
+		return PdxlnEngineConvert(
+			CTranslatorExprToDXLUtils::PdxlpropCopy(m_mp, pdxlnTblScan),
+			true /*fToEngine*/, false /*fIpc*/, pdxlnTblScan, nullptr);
 	}
 	return pdxlnTblScan;
 }
@@ -2427,12 +2421,9 @@ CTranslatorExprToDXL::PdxlnCTEProducer(
 	// columns in the producer's order, which consumers decode by position.
 	if (fEngine)
 	{
-		CDXLNode *pdxlnSend = GPOS_NEW(m_mp) CDXLNode(
-			m_mp, GPOS_NEW(m_mp) CDXLPhysicalEngineConvert(m_mp, false, true));
-		pdxlnSend->SetProperties(GetProperties(pexprRelational));
-		pdxlnSend->AddChild(PdxlnProjList(pcrsOutput, pdrgpcrRequired));
-		pdxlnSend->AddChild(child_dxlnode);
-		child_dxlnode = pdxlnSend;
+		child_dxlnode = PdxlnEngineConvert(
+			GetProperties(pexprRelational), false /*fToEngine*/, true /*fIpc*/,
+			child_dxlnode, PdxlnProjList(pcrsOutput, pdrgpcrRequired));
 	}
 	pcrsOutput->Release();
 
@@ -2493,12 +2484,9 @@ CTranslatorExprToDXL::PdxlnCTEConsumer(
 	if (EeeExternal ==
 		CDrvdPropPlan::Pdpplan(pexprCTEConsumer->PdpDerive())->Ee())
 	{
-		CDXLNode *pdxlnRecv = GPOS_NEW(m_mp) CDXLNode(
-			m_mp, GPOS_NEW(m_mp) CDXLPhysicalEngineConvert(m_mp, true, true));
-		pdxlnRecv->SetProperties(GetProperties(pexprCTEConsumer));
-		pdxlnRecv->AddChild(PdxlnProjList(pcrsOutput, colref_array));
-		pdxlnRecv->AddChild(pdxlnCTEConsumer);
-		pdxlnCTEConsumer = pdxlnRecv;
+		pdxlnCTEConsumer = PdxlnEngineConvert(
+			GetProperties(pexprCTEConsumer), true /*fToEngine*/, true /*fIpc*/,
+			pdxlnCTEConsumer, PdxlnProjList(pcrsOutput, colref_array));
 	}
 	pcrsOutput->Release();
 
@@ -4836,14 +4824,9 @@ CTranslatorExprToDXL::PdxlnMotion(CExpression *pexprMotion,
 	if (fEngine)
 	{
 		GPOS_ASSERT(!CUtils::FDuplicateHazardMotion(pexprMotion));
-		CDXLNode *pdxlnSend = GPOS_NEW(m_mp) CDXLNode(
-			m_mp, GPOS_NEW(m_mp) CDXLPhysicalEngineConvert(m_mp, false, true));
-		pdxlnSend->SetProperties(GetProperties(pexprChild));
-		pdxlnSend->AddChild(
-			CTranslatorExprToDXLUtils::PdxlnProjListFromChildProjList(
-				m_mp, m_pcf, m_phmcrdxln, (*child_dxlnode)[0]));
-		pdxlnSend->AddChild(child_dxlnode);
-		child_dxlnode = pdxlnSend;
+		child_dxlnode =
+			PdxlnEngineConvert(GetProperties(pexprChild), false /*fToEngine*/,
+							   true /*fIpc*/, child_dxlnode, nullptr);
 	}
 
 	// construct a motion node
@@ -4966,27 +4949,14 @@ CTranslatorExprToDXL::PdxlnMotion(CExpression *pexprMotion,
 
 	if (fEngine)
 	{
-		CDXLNode *pdxlnRecv = GPOS_NEW(m_mp) CDXLNode(
-			m_mp, GPOS_NEW(m_mp) CDXLPhysicalEngineConvert(m_mp, true, true));
-		pdxlnRecv->SetProperties(GetProperties(pexprMotion));
-		pdxlnRecv->AddChild(
-			CTranslatorExprToDXLUtils::PdxlnProjListFromChildProjList(
-				m_mp, m_pcf, m_phmcrdxln, proj_list_dxlnode));
-		pdxlnRecv->AddChild(pdxlnMotion);
-		return pdxlnRecv;
+		return PdxlnEngineConvert(GetProperties(pexprMotion),
+								  true /*fToEngine*/, true /*fIpc*/,
+								  pdxlnMotion, nullptr);
 	}
 
 	return pdxlnMotion;
 }
 
-//---------------------------------------------------------------------------
-//	@function:
-//		CTranslatorExprToDXL::PdxlnMaterialize
-//
-//	@doc:
-//		Create a DXL materialize node from an optimizer spool expression
-//
-//---------------------------------------------------------------------------
 CDXLNode *
 CTranslatorExprToDXL::PdxlnEngineConvert(
 	CExpression *pexprConvert, CColRefArray *colref_array,
@@ -5001,8 +4971,6 @@ CTranslatorExprToDXL::PdxlnEngineConvert(
 
 	CPhysicalEngineConvert *popConvert =
 		CPhysicalEngineConvert::PopConvert(pexprConvert->Pop());
-	CDXLPhysicalEngineConvert *dxlop = GPOS_NEW(m_mp)
-		CDXLPhysicalEngineConvert(m_mp, EeeExternal == popConvert->EeTarget());
 
 	// A correlated NLJ yields its inner columns as subplans, which its
 	// consumers inline wherever they reference them. Above a conversion to
@@ -5062,17 +5030,41 @@ CTranslatorExprToDXL::PdxlnEngineConvert(
 		pdrgpcrSubplan->Release();
 	}
 
-	CDXLNode *proj_list_dxlnode =
-		CTranslatorExprToDXLUtils::PdxlnProjListFromChildProjList(
-			m_mp, m_pcf, m_phmcrdxln, (*child_dxlnode)[0]);
+	return PdxlnEngineConvert(GetProperties(pexprConvert),
+							  EeeExternal == popConvert->EeTarget(),
+							  false /*fIpc*/, child_dxlnode, nullptr);
+}
 
-	CDXLNode *dxlnode = GPOS_NEW(m_mp) CDXLNode(m_mp, dxlop);
-	dxlnode->SetProperties(GetProperties(pexprConvert));
+// Wrap a translated child in a conversion; the project list defaults to the
+// child's.
+CDXLNode *
+CTranslatorExprToDXL::PdxlnEngineConvert(CDXLPhysicalProperties *dxl_properties,
+										 BOOL fToEngine, BOOL fIpc,
+										 CDXLNode *child_dxlnode,
+										 CDXLNode *proj_list_dxlnode)
+{
+	if (nullptr == proj_list_dxlnode)
+	{
+		proj_list_dxlnode =
+			CTranslatorExprToDXLUtils::PdxlnProjListFromChildProjList(
+				m_mp, m_pcf, m_phmcrdxln, (*child_dxlnode)[0]);
+	}
+	CDXLNode *dxlnode = GPOS_NEW(m_mp) CDXLNode(
+		m_mp, GPOS_NEW(m_mp) CDXLPhysicalEngineConvert(m_mp, fToEngine, fIpc));
+	dxlnode->SetProperties(dxl_properties);
 	dxlnode->AddChild(proj_list_dxlnode);
 	dxlnode->AddChild(child_dxlnode);
 	return dxlnode;
 }
 
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorExprToDXL::PdxlnMaterialize
+//
+//	@doc:
+//		Create a DXL materialize node from an optimizer spool expression
+//
+//---------------------------------------------------------------------------
 CDXLNode *
 CTranslatorExprToDXL::PdxlnMaterialize(
 	CExpression *pexprSpool, CColRefArray *colref_array,
@@ -5173,15 +5165,9 @@ CTranslatorExprToDXL::PdxlnSequence(CExpression *pexprSequence,
 		// below its last child through to the region above it, as a motion
 		if (fEngine && ul == arity - 1)
 		{
-			CDXLNode *pdxlnSend = GPOS_NEW(m_mp) CDXLNode(
-				m_mp,
-				GPOS_NEW(m_mp) CDXLPhysicalEngineConvert(m_mp, false, true));
-			pdxlnSend->SetProperties(GetProperties(pexprChild));
-			pdxlnSend->AddChild(
-				CTranslatorExprToDXLUtils::PdxlnProjListFromChildProjList(
-					m_mp, m_pcf, m_phmcrdxln, (*child_dxlnode)[0]));
-			pdxlnSend->AddChild(child_dxlnode);
-			child_dxlnode = pdxlnSend;
+			child_dxlnode = PdxlnEngineConvert(
+				GetProperties(pexprChild), false /*fToEngine*/, true /*fIpc*/,
+				child_dxlnode, nullptr);
 		}
 		pdrgpdxlnChildren->Append(child_dxlnode);
 	}
@@ -5211,14 +5197,9 @@ CTranslatorExprToDXL::PdxlnSequence(CExpression *pexprSequence,
 
 	if (fEngine)
 	{
-		CDXLNode *pdxlnRecv = GPOS_NEW(m_mp) CDXLNode(
-			m_mp, GPOS_NEW(m_mp) CDXLPhysicalEngineConvert(m_mp, true, true));
-		pdxlnRecv->SetProperties(GetProperties(pexprSequence));
-		pdxlnRecv->AddChild(
-			CTranslatorExprToDXLUtils::PdxlnProjListFromChildProjList(
-				m_mp, m_pcf, m_phmcrdxln, proj_list_dxlnode));
-		pdxlnRecv->AddChild(pdxlnSequence);
-		return pdxlnRecv;
+		return PdxlnEngineConvert(GetProperties(pexprSequence),
+								  true /*fToEngine*/, true /*fIpc*/,
+								  pdxlnSequence, nullptr);
 	}
 
 	return pdxlnSequence;

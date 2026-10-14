@@ -672,17 +672,11 @@ CXformUtils::AddHashOrMergeJoinAlternative(
 
 	// Engine twin for every hash join type. The key arrays are shared, so
 	// take references before the PG alternative may be released below.
-	COperator::EOperatorId eopidJoin = op->Eopid();
 	BOOL fEngine =
-		(COperator::EopPhysicalInnerHashJoin == eopidJoin ||
-		 COperator::EopPhysicalLeftOuterHashJoin == eopidJoin ||
-		 COperator::EopPhysicalRightOuterHashJoin == eopidJoin ||
-		 COperator::EopPhysicalLeftSemiHashJoin == eopidJoin ||
-		 COperator::EopPhysicalLeftAntiSemiHashJoin == eopidJoin ||
-		 COperator::EopPhysicalFullHashJoin == eopidJoin ||
-		 (COperator::EopPhysicalLeftAntiSemiHashJoinNotIn == eopidJoin &&
-		  (1 == pdrgpexprOuter->Size() ||
-		   CExternalEngineUtils::FHas(EefMultiKeyNotIn)))) &&
+		CUtils::FHashJoin(op) &&
+		(COperator::EopPhysicalLeftAntiSemiHashJoinNotIn != op->Eopid() ||
+		 1 == pdrgpexprOuter->Size() ||
+		 CExternalEngineUtils::FHas(EefMultiKeyNotIn)) &&
 		CExternalEngineUtils::FEnabled(EeopHashJoin) &&
 		CExternalEngineUtils::FLargeEnough(pexprJoin) &&
 		CExternalEngineUtils::FColsSupported(
