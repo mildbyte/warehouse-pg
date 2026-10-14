@@ -590,27 +590,11 @@ CTranslatorDXLToPlStmt::TranslateDXLEngineRegion(
 							  &leaves);
 	cscan->custom_plans = leaves;
 
+	// The region feeding an engine motion yields (segment, payload) rows,
+	// which the motion above routes; no one references its columns.
+	List *target_list = dxlop->IsIpc() ? EngineIpcTargetList(INDEX_VAR) : NIL;
 	CDXLNode *proj_list_dxlnode =
 		(*region_dxlnode)[EdxlengineconvertIndexProjList];
-	List *target_list = NIL;
-	List *scan_tlist = NIL;
-	if (dxlop->IsIpc())
-	{
-		// The region feeds an engine motion; the motion above routes its
-		// rows and nothing references the region's columns directly.
-		target_list = EngineIpcTargetList(INDEX_VAR);
-		ListCell *lc;
-		ForEach(lc, target_list)
-		{
-			TargetEntry *te = (TargetEntry *) lfirst(lc);
-			TargetEntry *scan_te = MakeNode(TargetEntry);
-			scan_te->expr =
-				(Expr *) gpdb::MakeNULLConst(gpdb::ExprType((Node *) te->expr));
-			scan_te->resno = te->resno;
-			scan_te->resname = te->resname;
-			scan_tlist = gpdb::LAppend(scan_tlist, scan_te);
-		}
-	}
 	for (ULONG ul = 0; !dxlop->IsIpc() && ul < proj_list_dxlnode->Arity(); ul++)
 	{
 		CDXLNode *proj_elem_dxlnode = (*proj_list_dxlnode)[ul];
@@ -620,30 +604,33 @@ CTranslatorDXLToPlStmt::TranslateDXLEngineRegion(
 			CDXLScalarIdent::Cast((*proj_elem_dxlnode)[0]->GetOperator())
 				->GetDXLColRef();
 		Oid type_oid = CMDIdGPDB::CastMdid(colref->MdidType())->Oid();
-		INT typmod = colref->TypeModifier();
-		Oid collation = gpdb::TypeCollation(type_oid);
-		CHAR *name = CTranslatorUtils::CreateMultiByteCharStringFromWCString(
-			proj_elem->GetMdNameAlias()->GetMDName()->GetBuffer());
-
-		Var *var =
-			gpdb::MakeVar(INDEX_VAR, (AttrNumber)(ul + 1), type_oid, typmod, 0);
-		var->varcollid = collation;
+		Var *var = gpdb::MakeVar(INDEX_VAR, (AttrNumber)(ul + 1), type_oid,
+								 colref->TypeModifier(), 0);
+		var->varcollid = gpdb::TypeCollation(type_oid);
 		TargetEntry *te = MakeNode(TargetEntry);
 		te->expr = (Expr *) var;
 		te->resno = (AttrNumber)(ul + 1);
-		te->resname = name;
+		te->resname = CTranslatorUtils::CreateMultiByteCharStringFromWCString(
+			proj_elem->GetMdNameAlias()->GetMDName()->GetBuffer());
 		target_list = gpdb::LAppend(target_list, te);
 		output_context->InsertMapping(proj_elem->Id(), te);
+	}
 
-		// The scan tuple has no source expression; a typed NULL keeps
-		// EXPLAIN VERBOSE from chasing INDEX_VAR into itself.
-		Const *placeholder = (Const *) gpdb::MakeNULLConst(type_oid);
-		placeholder->consttypmod = typmod;
-		placeholder->constcollid = collation;
+	// The scan tuple has no source expression; typed NULLs keep EXPLAIN
+	// VERBOSE from chasing INDEX_VAR into itself.
+	List *scan_tlist = NIL;
+	ListCell *lc;
+	ForEach(lc, target_list)
+	{
+		TargetEntry *te = (TargetEntry *) lfirst(lc);
+		Const *placeholder =
+			(Const *) gpdb::MakeNULLConst(gpdb::ExprType((Node *) te->expr));
+		placeholder->consttypmod = gpdb::ExprTypeMod((Node *) te->expr);
+		placeholder->constcollid = gpdb::ExprCollation((Node *) te->expr);
 		TargetEntry *scan_te = MakeNode(TargetEntry);
 		scan_te->expr = (Expr *) placeholder;
-		scan_te->resno = (AttrNumber)(ul + 1);
-		scan_te->resname = name;
+		scan_te->resno = te->resno;
+		scan_te->resname = te->resname;
 		scan_tlist = gpdb::LAppend(scan_tlist, scan_te);
 	}
 	plan->targetlist = target_list;
