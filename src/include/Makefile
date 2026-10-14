@@ -17,6 +17,8 @@ all: pg_config.h pg_config_ext.h pg_config_os.h check_oids
 
 
 # Subdirectories containing installable headers
+ORCA_LIBS = libgpos libnaucrates libgpopt libgpdbcost
+
 SUBDIRS = access bootstrap catalog commands common datatype \
 	executor fe_utils foreign jit \
 	lib libpq mb nodes optimizer parser partitioning postmaster \
@@ -65,17 +67,27 @@ endif
 	  cd '$(DESTDIR)$(includedir_server)'/$$dir || exit; \
 	  chmod $(INSTALL_DATA_MODE) *.h || exit; \
 	done
+ifeq ($(enable_orca),yes)
+# Orca's headers, for extensions that plug into it (see IExternalEngine.h)
+	for lib in $(ORCA_LIBS); do \
+	  cp -R $(top_srcdir)/src/backend/gporca/$$lib/include/. '$(DESTDIR)$(includedir_server)'/gporca/ || exit; \
+	done
+	find '$(DESTDIR)$(includedir_server)'/gporca -type f -exec chmod $(INSTALL_DATA_MODE) {} +
+endif
 
 installdirs:
 	$(MKDIR_P) '$(DESTDIR)$(includedir)/libpq' '$(DESTDIR)$(includedir_internal)/libpq'
 	$(MKDIR_P) $(addprefix '$(DESTDIR)$(includedir_server)'/, $(SUBDIRS))
+ifeq ($(enable_orca),yes)
+	$(MKDIR_P) '$(DESTDIR)$(includedir_server)'/gporca
+endif
 
 
 uninstall:
 	rm -f $(addprefix '$(DESTDIR)$(includedir)'/, pg_config.h pg_config_ext.h pg_config_os.h pg_config_manual.h postgres_ext.h libpq/libpq-fs.h)
 	rm -f $(addprefix '$(DESTDIR)$(includedir_internal)'/, c.h port.h postgres_fe.h libpq/pqcomm.h)
 # heuristic...
-	rm -rf $(addprefix '$(DESTDIR)$(includedir_server)'/, $(SUBDIRS) *.h)
+	rm -rf $(addprefix '$(DESTDIR)$(includedir_server)'/, $(SUBDIRS) gporca *.h)
 
 check_oids:
 	(cd $(abs_top_srcdir)/src/include/catalog/ && ./duplicate_oids) 
