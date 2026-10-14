@@ -50,7 +50,7 @@ public:
 	virtual CDistributionSpec *Pds() const = 0;
 
 	// An engine motion over a ToEngine would ship rows PG can ship itself
-	// through an island that only converts them, so its input must be a real
+	// through a region that only converts them, so its input must be a real
 	// engine operator.
 	EExecEngine
 	EeRequired(CExpressionHandle &, ULONG) const override

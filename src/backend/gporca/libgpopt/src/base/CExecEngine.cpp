@@ -454,7 +454,7 @@ CExternalEngineUtils::FScalarSupported(CExpression *pexpr)
 // external on both ends. The duplicate-hazard redistributes GPDB turns into hash
 // filters stay PG; hash keys must be columns the engine can hash exactly like
 // cdbhash, so the result is co-located with tables. A merging gather ships
-// unordered and the receiving island sorts.
+// unordered and the receiving region sorts.
 CExpression *
 CExternalEngineUtils::PexprEngineMotion(CMemoryPool *mp,
 										CExpressionHandle &exprhdl,

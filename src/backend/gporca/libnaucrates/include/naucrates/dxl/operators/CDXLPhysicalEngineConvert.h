@@ -2,7 +2,7 @@
 //	CDXLPhysicalEngineConvert.h
 //
 //	Engine boundary: children are [project list, child plan]. A ToPG node is
-//	the root of an engine island; ToEngine nodes are its leaves.
+//	the root of an engine region; ToEngine nodes are its leaves.
 //---------------------------------------------------------------------------
 #ifndef GPDXL_CDXLPhysicalEngineConvert_H
 #define GPDXL_CDXLPhysicalEngineConvert_H

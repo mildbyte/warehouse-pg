@@ -347,18 +347,24 @@ private:
 			ctxt_translation_prev_siblings	// translation contexts of previous siblings
 	);
 
-	Plan *TranslateDXLEngineIsland(
-		const CDXLNode *island_dxlnode, CDXLTranslateContext *output_context,
+	Plan *TranslateDXLEngineRegion(
+		const CDXLNode *region_dxlnode, CDXLTranslateContext *output_context,
 		CDXLTranslationContextArray *ctxt_translation_prev_siblings);
 
 	// targetlist of (segment, payload) rows referencing varno
 	static List *EngineIpcTargetList(Index varno);
 
-	void TranslateDXLEngineMotion(const CDXLNode *motion_dxlnode,
-								  const CDXLNode *island_dxlnode,
-								  CustomScan *island, Motion *motion);
+	// whether the node is a region root shipping (segment, payload) rows
+	static BOOL IsEngineIpc(const CDXLNode *dxlnode);
 
-	void CollectEngineIslandLeaves(
+	// tell the region where its (segment, payload) rows go
+	static void AppendEngineRoute(Plan *region, const char *route);
+
+	void TranslateDXLEngineMotion(const CDXLNode *motion_dxlnode,
+								  const CDXLNode *region_dxlnode,
+								  CustomScan *region, Motion *motion);
+
+	void CollectEngineRegionInputs(
 		const CDXLNode *dxlnode, CDXLTranslateContext *output_context,
 		CDXLTranslationContextArray *ctxt_translation_prev_siblings,
 		List **leaves);

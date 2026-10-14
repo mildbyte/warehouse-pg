@@ -85,9 +85,12 @@ typedef enum OrcaEngineFeature
 } OrcaEngineFeature;
 
 /*
- * An engine motion ships an island's output as rows of these two columns:
+ * An engine motion ships a region's output as rows of these two columns:
  * the target segment (for redistribution) and a serialized batch. The
- * sending island's custom_private gets a second String with its route.
+ * sending region's custom_private gets a second String with its route:
+ * "gather", "broadcast", "random <numsegs>" or
+ * "hash <numsegs> <attno>:<hashfunc oid>...", attnos numbering the region's
+ * DXL project list from 1. The region computes the segment as cdbhash would.
  */
 #define ORCA_ENGINE_MOTION_SEGID_COL "engine_segid"
 #define ORCA_ENGINE_MOTION_PAYLOAD_COL "engine_payload"

@@ -79,7 +79,7 @@ public:
 	// match function
 	BOOL Matches(COperator *pop) const override;
 
-	// An engine producer shares the IPC batches of the island below it, so
+	// An engine producer shares the IPC batches of the region below it, so
 	// consumers read them back as engine batches; to its parent it yields no rows
 	EExecEngine
 	EeRequired(CExpressionHandle &, ULONG) const override

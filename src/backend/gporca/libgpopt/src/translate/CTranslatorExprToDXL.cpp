@@ -2423,7 +2423,7 @@ CTranslatorExprToDXL::PdxlnCTEProducer(
 
 	CDXLNode *pdxlnPrL = PdxlnProjList(pcrsOutput, pdrgpcrRequired);
 
-	// An engine producer shares the IPC batches of the island below it, with
+	// An engine producer shares the IPC batches of the region below it, with
 	// columns in the producer's order, which consumers decode by position.
 	if (fEngine)
 	{
@@ -2488,7 +2488,7 @@ CTranslatorExprToDXL::PdxlnCTEConsumer(
 
 	pdxlnCTEConsumer->SetProperties(dxl_properties);
 
-	// the consumer of an engine producer reads IPC batches, which the island
+	// the consumer of an engine producer reads IPC batches, which the region
 	// above decodes
 	if (EeeExternal ==
 		CDrvdPropPlan::Pdpplan(pexprCTEConsumer->PdpDerive())->Ee())
@@ -2695,7 +2695,7 @@ CTranslatorExprToDXL::PdxlnRemapOutputColumns(CExpression *pexpr,
 	pcrsOutput->Release();
 
 	// a ToPG emits whatever columns its project list names, so reorder that
-	// rather than add a Result on top of the island
+	// rather than add a Result on top of the region
 	if (EdxlopPhysicalEngineConvert ==
 			dxlnode->GetOperator()->GetDXLOperator() &&
 		!CDXLPhysicalEngineConvert::Cast(dxlnode->GetOperator())->IsToEngine())
@@ -4822,9 +4822,9 @@ CTranslatorExprToDXL::PdxlnMotion(CExpression *pexprMotion,
 		pexprChild, colref_array, pdrgpdsBaseTables, pulNonGatherMotions, pfDML,
 		!fEngine /*fRemap*/, false /*fRoot*/);
 
-	// An engine motion is a PG motion between two IPC conversions: the island
+	// An engine motion is a PG motion between two IPC conversions: the region
 	// below emits its batches as (segment, payload) rows routed by the
-	// motion, and the island above decodes them.
+	// motion, and the region above decodes them.
 	if (fEngine)
 	{
 		GPOS_ASSERT(!CUtils::FDuplicateHazardMotion(pexprMotion));
@@ -4998,8 +4998,8 @@ CTranslatorExprToDXL::PdxlnEngineConvert(
 
 	// A correlated NLJ yields its inner columns as subplans, which its
 	// consumers inline wherever they reference them. Above a conversion to
-	// the engine that would be inside the engine island, so evaluate them in a PG
-	// Result below the conversion and let the island read plain columns.
+	// the engine that would be inside the engine region, so evaluate them in a PG
+	// Result below the conversion and let the region read plain columns.
 	if (EeeExternal == popConvert->EeTarget())
 	{
 		CColRefArray *pdrgpcrSubplan = GPOS_NEW(m_mp) CColRefArray(m_mp);
@@ -5161,8 +5161,8 @@ CTranslatorExprToDXL::PdxlnSequence(CExpression *pexprSequence,
 		CDXLNode *child_dxlnode = CreateDXLNode(
 			pexprChild, pdrgpcrChildOutput, pdrgpdsBaseTables,
 			pulNonGatherMotions, pfDML, false /*fRemap*/, false /*fRoot*/);
-		// an engine sequence passes the (segment, payload) rows of the island
-		// below its last child through to the island above it, as a motion
+		// an engine sequence passes the (segment, payload) rows of the region
+		// below its last child through to the region above it, as a motion
 		if (fEngine && ul == arity - 1)
 		{
 			CDXLNode *pdxlnSend = GPOS_NEW(m_mp) CDXLNode(

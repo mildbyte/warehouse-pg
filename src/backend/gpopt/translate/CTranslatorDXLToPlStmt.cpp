@@ -538,7 +538,7 @@ CTranslatorDXLToPlStmt::TranslateDXLOperatorToPlan(
 		}
 		case EdxlopPhysicalEngineConvert:
 		{
-			plan = TranslateDXLEngineIsland(dxlnode, output_context,
+			plan = TranslateDXLEngineRegion(dxlnode, output_context,
 											ctxt_translation_prev_siblings);
 			break;
 		}
@@ -552,29 +552,30 @@ CTranslatorDXLToPlStmt::TranslateDXLOperatorToPlan(
 	return plan;
 }
 
-// A ToPG engine conversion is the root of an engine island. The island becomes
-// a CustomScan owned by the extension: custom_private carries the island's
+// A ToPG engine conversion is the root of an engine region. The region becomes
+// a CustomScan owned by the extension: custom_private carries the region's
 // DXL, custom_plans the PG plans below its ToEngine leaves (in DXL pre-order),
-// and the targetlist exposes the island output via custom_scan_tlist.
+// and the targetlist exposes the region output via custom_scan_tlist.
 Plan *
-CTranslatorDXLToPlStmt::TranslateDXLEngineIsland(
-	const CDXLNode *island_dxlnode, CDXLTranslateContext *output_context,
+CTranslatorDXLToPlStmt::TranslateDXLEngineRegion(
+	const CDXLNode *region_dxlnode, CDXLTranslateContext *output_context,
 	CDXLTranslationContextArray *ctxt_translation_prev_siblings)
 {
 	CDXLPhysicalEngineConvert *dxlop =
-		CDXLPhysicalEngineConvert::Cast(island_dxlnode->GetOperator());
+		CDXLPhysicalEngineConvert::Cast(region_dxlnode->GetOperator());
 	if (dxlop->IsToEngine())
 	{
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
-				   GPOS_WSZ_LIT("ToEngine outside of an engine island"));
+				   GPOS_WSZ_LIT("ToEngine outside of an engine region"));
 	}
 
 	const CustomScanMethods *methods = gpdb::GetCustomScanMethods(
 		orca_external_engine->custom_scan_name, true);
 	if (nullptr == methods)
 	{
-		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
-				   GPOS_WSZ_LIT("no engine island executor registered"));
+		GPOS_RAISE(
+			gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
+			GPOS_WSZ_LIT("external engine CustomScan methods not registered"));
 	}
 
 	CustomScan *cscan = MakeNode(CustomScan);
@@ -582,41 +583,31 @@ CTranslatorDXLToPlStmt::TranslateDXLEngineIsland(
 	cscan->scan.scanrelid = 0;
 	Plan *plan = &(cscan->scan.plan);
 	plan->plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
-	TranslatePlanCosts(island_dxlnode, plan);
+	TranslatePlanCosts(region_dxlnode, plan);
 
 	List *leaves = NIL;
-	CollectEngineIslandLeaves((*island_dxlnode)[EdxlengineconvertIndexChild],
+	CollectEngineRegionInputs((*region_dxlnode)[EdxlengineconvertIndexChild],
 							  output_context, ctxt_translation_prev_siblings,
 							  &leaves);
 	cscan->custom_plans = leaves;
 
 	CDXLNode *proj_list_dxlnode =
-		(*island_dxlnode)[EdxlengineconvertIndexProjList];
+		(*region_dxlnode)[EdxlengineconvertIndexProjList];
 	List *target_list = NIL;
 	List *scan_tlist = NIL;
 	if (dxlop->IsIpc())
 	{
-		// The island feeds an engine motion; the motion above routes its
-		// rows and nothing references the island's columns directly.
-		const struct
+		// The region feeds an engine motion; the motion above routes its
+		// rows and nothing references the region's columns directly.
+		target_list = EngineIpcTargetList(INDEX_VAR);
+		ListCell *lc;
+		ForEach(lc, target_list)
 		{
-			const char *name;
-			Oid type;
-		} cols[] = {{ORCA_ENGINE_MOTION_SEGID_COL, INT4OID},
-					{ORCA_ENGINE_MOTION_PAYLOAD_COL, BYTEAOID}};
-		for (ULONG ul = 0; ul < 2; ul++)
-		{
-			Var *var = gpdb::MakeVar(INDEX_VAR, (AttrNumber)(ul + 1),
-									 cols[ul].type, -1, 0);
-			TargetEntry *te = MakeNode(TargetEntry);
-			te->expr = (Expr *) var;
-			te->resno = (AttrNumber)(ul + 1);
-			te->resname = PStrDup(cols[ul].name);
-			target_list = gpdb::LAppend(target_list, te);
-
+			TargetEntry *te = (TargetEntry *) lfirst(lc);
 			TargetEntry *scan_te = MakeNode(TargetEntry);
-			scan_te->expr = (Expr *) gpdb::MakeNULLConst(cols[ul].type);
-			scan_te->resno = (AttrNumber)(ul + 1);
+			scan_te->expr =
+				(Expr *) gpdb::MakeNULLConst(gpdb::ExprType((Node *) te->expr));
+			scan_te->resno = te->resno;
 			scan_te->resname = te->resname;
 			scan_tlist = gpdb::LAppend(scan_tlist, scan_te);
 		}
@@ -663,7 +654,7 @@ CTranslatorDXLToPlStmt::TranslateDXLEngineIsland(
 	CWStringDynamic dxl_str(m_mp);
 	COstreamString oss(&dxl_str);
 	CDXLUtils::SerializePlan(
-		m_mp, oss, island_dxlnode, 0 /*plan_id*/, 0 /*plan_space_size*/,
+		m_mp, oss, region_dxlnode, 0 /*plan_id*/, 0 /*plan_space_size*/,
 		true /*serialize_header_footer*/, false /*indentation*/);
 	CHAR *dxl = CTranslatorUtils::CreateMultiByteCharStringFromWCString(
 		dxl_str.GetBuffer());
@@ -673,15 +664,14 @@ CTranslatorDXLToPlStmt::TranslateDXLEngineIsland(
 	return (Plan *) cscan;
 }
 
-// An engine motion moves the (segment, payload) rows of the island below it.
+// An engine motion moves the (segment, payload) rows of the region below it.
 // Redistribution becomes an explicit motion on the segment column, which the
-// island computes with cdbhash; it learns how from a route appended to its
-// custom_private: "gather", "broadcast" or "hash <numsegs> <attno>:<hashfunc>...",
-// attnos referring to the island's DXL project list.
+// region computes from the route appended to its custom_private (see
+// optimizer/orca.h).
 void
 CTranslatorDXLToPlStmt::TranslateDXLEngineMotion(const CDXLNode *motion_dxlnode,
-												 const CDXLNode *island_dxlnode,
-												 CustomScan *island,
+												 const CDXLNode *region_dxlnode,
+												 CustomScan *region,
 												 Motion *motion)
 {
 	CDXLPhysicalMotion *motion_dxlop =
@@ -692,20 +682,7 @@ CTranslatorDXLToPlStmt::TranslateDXLEngineMotion(const CDXLNode *motion_dxlnode,
 				   GPOS_WSZ_LIT("duplicate-sensitive engine motion"));
 	}
 
-	List *target_list = NIL;
-	const Oid types[] = {INT4OID, BYTEAOID};
-	const char *names[] = {ORCA_ENGINE_MOTION_SEGID_COL,
-						   ORCA_ENGINE_MOTION_PAYLOAD_COL};
-	for (ULONG ul = 0; ul < 2; ul++)
-	{
-		TargetEntry *te = MakeNode(TargetEntry);
-		te->expr = (Expr *) gpdb::MakeVar(OUTER_VAR, (AttrNumber)(ul + 1),
-										  types[ul], -1, 0);
-		te->resno = (AttrNumber)(ul + 1);
-		te->resname = PStrDup(names[ul]);
-		target_list = gpdb::LAppend(target_list, te);
-	}
-	motion->plan.targetlist = target_list;
+	motion->plan.targetlist = EngineIpcTargetList(OUTER_VAR);
 	motion->plan.qual = NIL;
 	motion->sendSorted = false;
 	motion->numSortCols = 0;
@@ -739,7 +716,7 @@ CTranslatorDXLToPlStmt::TranslateDXLEngineMotion(const CDXLNode *motion_dxlnode,
 					 (int) motion_dxlop->GetOutputSegIdsArray()->Size());
 			route = buf;
 			CDXLNode *proj_list =
-				(*island_dxlnode)[EdxlengineconvertIndexProjList];
+				(*region_dxlnode)[EdxlengineconvertIndexProjList];
 			CDXLNode *hash_list = (*motion_dxlnode)[EdxlrmIndexHashExprList];
 			for (ULONG ul = 0; ul < hash_list->Arity(); ul++)
 			{
@@ -783,8 +760,24 @@ CTranslatorDXLToPlStmt::TranslateDXLEngineMotion(const CDXLNode *motion_dxlnode,
 			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
 					   GPOS_WSZ_LIT("unsupported engine motion"));
 	}
-	island->custom_private = gpdb::LAppend(
-		island->custom_private, gpdb::MakeStringValue(PStrDup(route.c_str())));
+	AppendEngineRoute((Plan *) region, route.c_str());
+}
+
+void
+CTranslatorDXLToPlStmt::AppendEngineRoute(Plan *region, const char *route)
+{
+	GPOS_ASSERT(IsA(region, CustomScan));
+	CustomScan *cscan = (CustomScan *) region;
+	cscan->custom_private = gpdb::LAppend(
+		cscan->custom_private, gpdb::MakeStringValue(PStrDup(route)));
+}
+
+BOOL
+CTranslatorDXLToPlStmt::IsEngineIpc(const CDXLNode *dxlnode)
+{
+	CDXLOperator *dxlop = dxlnode->GetOperator();
+	return EdxlopPhysicalEngineConvert == dxlop->GetDXLOperator() &&
+		   CDXLPhysicalEngineConvert::Cast(dxlop)->IsIpc();
 }
 
 List *
@@ -807,7 +800,7 @@ CTranslatorDXLToPlStmt::EngineIpcTargetList(Index varno)
 }
 
 void
-CTranslatorDXLToPlStmt::CollectEngineIslandLeaves(
+CTranslatorDXLToPlStmt::CollectEngineRegionInputs(
 	const CDXLNode *dxlnode, CDXLTranslateContext *output_context,
 	CDXLTranslationContextArray *ctxt_translation_prev_siblings, List **leaves)
 {
@@ -819,9 +812,8 @@ CTranslatorDXLToPlStmt::CollectEngineIslandLeaves(
 			m_mp, false, output_context->GetColIdToParamIdMap());
 		const CDXLNode *child = (*dxlnode)[EdxlengineconvertIndexChild];
 		Plan *leaf =
-			CDXLPhysicalEngineConvert::Cast(dxlop)->IsIpc() &&
-					EdxlopPhysicalCTEConsumer ==
-						child->GetOperator()->GetDXLOperator()
+			IsEngineIpc(dxlnode) && EdxlopPhysicalCTEConsumer ==
+										child->GetOperator()->GetDXLOperator()
 				? TranslateDXLCTEConsumerToSharedScan(
 					  child, &child_context, ctxt_translation_prev_siblings,
 					  true /*ipc*/)
@@ -836,7 +828,7 @@ CTranslatorDXLToPlStmt::CollectEngineIslandLeaves(
 		CDXLNode *child = (*dxlnode)[ul];
 		if (EdxloptypePhysical == child->GetOperator()->GetDXLOperatorType())
 		{
-			CollectEngineIslandLeaves(child, output_context,
+			CollectEngineRegionInputs(child, output_context,
 									  ctxt_translation_prev_siblings, leaves);
 		}
 	}
@@ -2725,9 +2717,7 @@ CTranslatorDXLToPlStmt::TranslateDXLMotion(
 	Plan *child_plan = TranslateDXLOperatorToPlan(
 		child_dxlnode, &child_context, ctxt_translation_prev_siblings);
 
-	if (EdxlopPhysicalEngineConvert ==
-			child_dxlnode->GetOperator()->GetDXLOperator() &&
-		CDXLPhysicalEngineConvert::Cast(child_dxlnode->GetOperator())->IsIpc())
+	if (IsEngineIpc(child_dxlnode))
 	{
 		TranslateDXLEngineMotion(motion_dxlnode, child_dxlnode,
 								 (CustomScan *) child_plan, motion);
@@ -4388,16 +4378,11 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEProducerToSharedScan(
 	CDXLTranslationContextArray *child_contexts =
 		GPOS_NEW(m_mp) CDXLTranslationContextArray(m_mp);
 	child_contexts->Append(&child_context);
-	if (EdxlopPhysicalEngineConvert ==
-			child_dxlnode->GetOperator()->GetDXLOperator() &&
-		CDXLPhysicalEngineConvert::Cast(child_dxlnode->GetOperator())->IsIpc())
+	if (IsEngineIpc(child_dxlnode))
 	{
-		// an engine producer shares the (segment, payload) rows of its island
-		GPOS_ASSERT(IsA(child_plan, CustomScan));
+		// an engine producer shares the (segment, payload) rows of its region
 		plan->targetlist = EngineIpcTargetList(OUTER_VAR);
-		CustomScan *island = (CustomScan *) child_plan;
-		island->custom_private = gpdb::LAppend(
-			island->custom_private, gpdb::MakeStringValue(PStrDup("gather")));
+		AppendEngineRoute(child_plan, "gather");
 	}
 	else
 	{
@@ -4537,17 +4522,11 @@ CTranslatorDXLToPlStmt::TranslateDXLSequence(
 		GPOS_NEW(m_mp) CDXLTranslationContextArray(m_mp);
 	child_contexts->Append(&child_context);
 
-	const CDXLNode *last_dxlnode = (*sequence_dxlnode)[arity - 1];
-	if (EdxlopPhysicalEngineConvert ==
-			last_dxlnode->GetOperator()->GetDXLOperator() &&
-		CDXLPhysicalEngineConvert::Cast(last_dxlnode->GetOperator())->IsIpc())
+	if (IsEngineIpc((*sequence_dxlnode)[arity - 1]))
 	{
-		// an engine sequence passes its last island's (segment, payload) rows
-		GPOS_ASSERT(IsA(child_plan, CustomScan));
+		// an engine sequence passes its last region's (segment, payload) rows
 		plan->targetlist = EngineIpcTargetList(OUTER_VAR);
-		CustomScan *island = (CustomScan *) child_plan;
-		island->custom_private = gpdb::LAppend(
-			island->custom_private, gpdb::MakeStringValue(PStrDup("gather")));
+		AppendEngineRoute(child_plan, "gather");
 	}
 	else
 	{
