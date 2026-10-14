@@ -60,6 +60,7 @@
 #include "unittest/gpopt/csq/CCorrelatedExecutionTest.h"
 #include "unittest/gpopt/engine/CBindingTest.h"
 #include "unittest/gpopt/engine/CEngineTest.h"
+#include "unittest/gpopt/engine/CExternalEngineTest.h"
 #include "unittest/gpopt/engine/CEnumeratorTest.h"
 #include "unittest/gpopt/eval/CConstExprEvaluatorDXLTest.h"
 #include "unittest/gpopt/eval/CConstExprEvaluatorDefaultTest.h"
@@ -165,7 +166,8 @@ static gpos::CUnittest rgut[] = {
 
 	GPOS_UNITTEST_STD(CSubqueryHandlerTest), GPOS_UNITTEST_STD(CBindingTest),
 	GPOS_UNITTEST_STD(CXformRightOuterJoin2HashJoinTest),
-	GPOS_UNITTEST_STD(CEngineTest), GPOS_UNITTEST_STD(CEquivalenceClassesTest),
+	GPOS_UNITTEST_STD(CEngineTest), GPOS_UNITTEST_STD(CExternalEngineTest),
+	GPOS_UNITTEST_STD(CEquivalenceClassesTest),
 	GPOS_UNITTEST_STD(CGroupTest), GPOS_UNITTEST_STD(CExpressionTest),
 	GPOS_UNITTEST_STD(CJoinOrderTest), GPOS_UNITTEST_STD(CKeyCollectionTest),
 	GPOS_UNITTEST_STD(CMaxCardTest),
