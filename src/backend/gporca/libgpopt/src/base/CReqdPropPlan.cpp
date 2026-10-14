@@ -176,7 +176,11 @@ CReqdPropPlan::Compute(CMemoryPool *mp, CExpressionHandle &exprhdl,
 								  child_index, pdrgpdpCtxt, ulPartPropagateReq),
 		CEnfdPartitionPropagation::EppmSatisfy);
 
-	m_ee = popPhysical->EeRequired(exprhdl, child_index);
+	// without an engine every request is the default one, which keeps the
+	// search exactly as it is without engine support
+	m_ee = nullptr != CExternalEngineUtils::Pengine()
+			   ? popPhysical->EeRequired(exprhdl, child_index)
+			   : EeePG;
 }
 
 //---------------------------------------------------------------------------
