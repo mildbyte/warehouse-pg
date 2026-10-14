@@ -74,6 +74,9 @@ typedef struct OrcaEngineConfig
 {
 	uint32		ops;			/* bitmask of 1 << OrcaEngineOp; 0 disables */
 	double		min_rows;		/* skip joins/aggs whose inputs are all smaller */
+	double		hash_build_limit;	/* per-segment bytes of a hash join build
+									 * the engine holds; larger ones run as
+									 * sort-merge joins. 0 = unlimited */
 } OrcaEngineConfig;
 
 typedef struct OrcaExternalEngine

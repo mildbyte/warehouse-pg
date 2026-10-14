@@ -923,10 +923,11 @@ COptTasks::OptimizeTask(void *ptr)
 		g_arrow_engine.m_operators = 0;
 		if (nullptr != orca_external_engine)
 		{
-			OrcaEngineConfig config = {0, 0.0};
+			OrcaEngineConfig config = {0, 0.0, 0.0};
 			gpdb::ExternalEngineConfigure(&config);
 			g_arrow_engine.m_operators = config.ops;
 			g_arrow_engine.m_min_rows = config.min_rows;
+			g_arrow_engine.m_hash_build_limit = config.hash_build_limit;
 		}
 		if (0 != g_arrow_engine.m_operators)
 		{

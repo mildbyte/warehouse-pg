@@ -165,7 +165,13 @@ private:
 	// cost of hash join
 	static CCost CostHashJoin(CMemoryPool *mp, CExpressionHandle &exprhdl,
 							  const CCostModelGPDB *pcmgpdb,
-							  const SCostingInfo *pci);
+							  const SCostingInfo *pci, BOOL in_memory = false);
+
+	// cost of an Arrow hash join whose build side exceeds the engine's
+	// limit, which the engine runs as a sort-merge join
+	static DOUBLE CostArrowSortMergeJoin(CExpressionHandle &exprhdl,
+										 const CCostModelGPDB *pcmgpdb,
+										 const SCostingInfo *pci);
 
 	// cost of merge join
 	static CCost CostMergeJoin(CMemoryPool *mp, CExpressionHandle &exprhdl,

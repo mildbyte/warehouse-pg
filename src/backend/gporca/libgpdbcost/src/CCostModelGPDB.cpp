@@ -25,6 +25,7 @@
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/base/COrderSpec.h"
 #include "gpopt/base/CExecEngine.h"
+#include "gpopt/base/CUtils.h"
 #include "gpopt/operators/CPhysicalEngineConvert.h"
 #include "gpopt/base/CWindowFrame.h"
 #include "gpopt/engine/CHint.h"
@@ -887,6 +888,46 @@ CCostModelGPDB::CostHashAgg(CMemoryPool *mp, CExpressionHandle &exprhdl,
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CCostModelGPDB::CostArrowSortMergeJoin
+//
+//	@doc:
+//		Local cost of an Arrow hash join the engine runs as a sort-merge
+//		join: both inputs sorted on the keys, then merged
+//
+//---------------------------------------------------------------------------
+DOUBLE
+CCostModelGPDB::CostArrowSortMergeJoin(CExpressionHandle &exprhdl,
+									   const CCostModelGPDB *pcmgpdb,
+									   const SCostingInfo *pci)
+{
+	const ICostModelParams *params = pcmgpdb->GetCostModelParams();
+	const DOUBLE sort_unit =
+		params->PcpLookup(CCostModelParamsGPDB::EcpSortTupWidthCostUnit)->Get().Get();
+	const DOUBLE feed_col_unit =
+		params->PcpLookup(CCostModelParamsGPDB::EcpJoinFeedingTupColumnCostUnit)
+			->Get().Get();
+	const DOUBLE feed_width_unit =
+		params->PcpLookup(CCostModelParamsGPDB::EcpJoinFeedingTupWidthCostUnit)
+			->Get().Get();
+	const DOUBLE output_unit =
+		params->PcpLookup(CCostModelParamsGPDB::EcpJoinOutputTupCostUnit)->Get().Get();
+	const ULONG cols =
+		exprhdl.PexprScalarRepChild(2)->DeriveUsedColumns()->Size();
+
+	DOUBLE cost = 0;
+	for (ULONG ul = 0; ul < 2; ul++)
+	{
+		const DOUBLE rows = std::max(2.0, pci->PdRows()[ul]);
+		const DOUBLE width = pci->GetWidth()[ul];
+		cost += rows * std::log2(rows) * width * sort_unit +
+				rows * (cols * feed_col_unit + width * feed_width_unit);
+	}
+	cost += pci->Rows() * pci->Width() * output_unit;
+	return pci->NumRebinds() * cost;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CCostModelGPDB::CostHashJoin
 //
 //	@doc:
@@ -896,7 +937,7 @@ CCostModelGPDB::CostHashAgg(CMemoryPool *mp, CExpressionHandle &exprhdl,
 CCost
 CCostModelGPDB::CostHashJoin(CMemoryPool *mp, CExpressionHandle &exprhdl,
 							 const CCostModelGPDB *pcmgpdb,
-							 const SCostingInfo *pci)
+							 const SCostingInfo *pci, BOOL in_memory)
 {
 	GPOS_ASSERT(nullptr != pcmgpdb);
 	GPOS_ASSERT(nullptr != pci);
@@ -991,7 +1032,7 @@ CCostModelGPDB::CostHashJoin(CMemoryPool *mp, CExpressionHandle &exprhdl,
 	CCost costLocal(0);
 
 	// inner tuples fit in memory
-	if (dRowsInner * dWidthInner <= dHJSpillingMemThreshold)
+	if (in_memory || dRowsInner * dWidthInner <= dHJSpillingMemThreshold)
 	{
 		// hash join cost contains four parts:
 		// 1. build hash table with inner tuples. This part is correlated with rows and width of
@@ -2523,14 +2564,38 @@ CCostModelGPDB::Cost(
 			std::swap(pci->PdRows()[0], pci->PdRows()[1]);
 			std::swap(pci->GetWidth()[0], pci->GetWidth()[1]);
 		}
-		CCost total = CostPG(exprhdl, pci);
+		CCost children = CostChildren(m_mp, exprhdl, pci, m_cost_model_params);
+		DOUBLE local;
+		if (CUtils::FHashJoin(exprhdl.Pop()))
+		{
+			// The engine's hash joins never spill, so PG's spilling model,
+			// which charges a probe row more than a build row, doesn't apply.
+			// Builds past the engine's limit run as sort-merge joins instead
+			// (except NOT IN, whose null-aware join only exists as a hash join).
+			const DOUBLE build_bytes =
+				pci->PdRows()[1] * (pci->GetWidth()[1] + 40.0);
+			if (0 < g_arrow_engine.m_hash_build_limit &&
+				build_bytes > g_arrow_engine.m_hash_build_limit &&
+				COperator::EopPhysicalLeftAntiSemiHashJoinNotIn != op_id)
+			{
+				local = CostArrowSortMergeJoin(exprhdl, this, pci);
+			}
+			else
+			{
+				CCost total = CostHashJoin(m_mp, exprhdl, this, pci, true);
+				local = std::max(total.Get() - children.Get(), 0.0);
+			}
+		}
+		else
+		{
+			CCost total = CostPG(exprhdl, pci);
+			local = std::max(total.Get() - children.Get(), 0.0);
+		}
 		if (fSwap)
 		{
 			std::swap(pci->PdRows()[0], pci->PdRows()[1]);
 			std::swap(pci->GetWidth()[0], pci->GetWidth()[1]);
 		}
-		CCost children = CostChildren(m_mp, exprhdl, pci, m_cost_model_params);
-		DOUBLE local = std::max(total.Get() - children.Get(), 0.0);
 		return children + CCost(g_arrow_engine.m_cost(op, local, pci->Rows(),
 													  pci->Width()));
 	}

@@ -102,6 +102,9 @@ struct SArrowEngineConfig
 	ULONG m_operators{0};
 	// joins/aggs whose inputs are all smaller than this get no Arrow twin
 	DOUBLE m_min_rows{0};
+	// per-segment bytes of a hash join build the engine holds in memory;
+	// larger builds run as sort-merge joins. 0 means unlimited.
+	DOUBLE m_hash_build_limit{0};
 };
 
 extern SArrowEngineConfig g_arrow_engine;
