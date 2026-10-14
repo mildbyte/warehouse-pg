@@ -1,8 +1,8 @@
 //---------------------------------------------------------------------------
-//	CExecEngine.cpp
+//	CExternalEngine.cpp
 //---------------------------------------------------------------------------
 
-#include "gpopt/base/CExecEngine.h"
+#include "gpopt/base/CExternalEngine.h"
 
 #include "gpos/common/clibwrapper.h"
 

@@ -248,8 +248,8 @@ CQueryContext::PqcGenerate(CMemoryPool *mp, CExpression *pexpr,
 	// constructed later based on derived relation properties (CPartInfo) by
 	// CReqdPropPlan::InitReqdPartitionPropagation().
 
-	CReqdPropPlan *prpp =
-		GPOS_NEW(mp) CReqdPropPlan(pcrs, peo, ped, per, pepp, pcter);
+	CReqdPropPlan *prpp = GPOS_NEW(mp) CReqdPropPlan(
+		pcrs, peo, ped, per, pepp, pcter, CReqdPropPlan::PeeDefault(mp));
 
 	// Finally, create the CQueryContext
 	pdrgpmdname->AddRef();

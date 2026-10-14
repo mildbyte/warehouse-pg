@@ -17,10 +17,10 @@
 #include "gpopt/base/CDistributionSpecSingleton.h"
 #include "gpopt/base/CDrvdPropPlan.h"
 #include "gpopt/base/CEnfdDistribution.h"
+#include "gpopt/base/CEnfdExecEngine.h"
 #include "gpopt/base/CEnfdOrder.h"
 #include "gpopt/base/CEnfdPartitionPropagation.h"
 #include "gpopt/base/CEnfdRewindability.h"
-#include "gpopt/base/CExecEngine.h"
 #include "gpopt/base/COrderSpec.h"
 #include "gpopt/base/CPartitionPropagationSpec.h"
 #include "gpopt/base/CRewindabilitySpec.h"
@@ -426,25 +426,36 @@ public:
 	}
 
 	// engine required from the given relational child
-	virtual EExecEngine
-	EeRequired(CExpressionHandle &,	 // exprhdl
-			   ULONG				 // child_index
+	virtual CExecEngineSpec *PesRequired(CMemoryPool *mp,
+										 CExpressionHandle &exprhdl,
+										 ULONG child_index) const;
+
+	// engine matching type required from the given relational child
+	virtual CEnfdExecEngine::EExecEngineMatching
+	Eeem(CExpressionHandle &,  // exprhdl
+		 ULONG				   // child_index
 	) const
 	{
-		return m_exec_engine;
+		return CEnfdExecEngine::EeemSatisfy;
 	}
 
 	// engine of this operator's output
-	virtual EExecEngine
-	EeDerive(CExpressionHandle &  // exprhdl
-	) const
+	virtual CExecEngineSpec *PesDerive(CMemoryPool *mp,
+									   CExpressionHandle &exprhdl) const;
+
+	// Whether the output is in the engine the operator runs in, so that under
+	// a request for the other engine the operator can only feed a conversion
+	// (see CEngine::FOptimizeChild). CTE producers and consumers derive the
+	// engine of what the producer shares instead.
+	virtual BOOL
+	FOutputInOwnEngine() const
 	{
-		return m_exec_engine;
+		return true;
 	}
 
-	// whether an engine conversion is needed over this operator
-	virtual CEnfdProp::EPropEnforcingType EpetEngine(
-		CExpressionHandle &exprhdl, EExecEngine eeRequired) const;
+	// engine enforcing type
+	virtual CEnfdProp::EPropEnforcingType EpetExecEngine(
+		CExpressionHandle &exprhdl, const CEnfdExecEngine *pee) const;
 
 	// order matching type
 	virtual CEnfdOrder::EOrderMatching Eom(CReqdPropPlan *prppInput,

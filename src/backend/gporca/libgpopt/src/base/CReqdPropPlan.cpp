@@ -21,9 +21,11 @@
 #include "gpopt/base/CDistributionSpecAny.h"
 #include "gpopt/base/CDistributionSpecSingleton.h"
 #include "gpopt/base/CEnfdDistribution.h"
+#include "gpopt/base/CEnfdExecEngine.h"
 #include "gpopt/base/CEnfdOrder.h"
 #include "gpopt/base/CEnfdPartitionPropagation.h"
 #include "gpopt/base/CEnfdRewindability.h"
+#include "gpopt/base/CExternalEngine.h"
 #include "gpopt/base/CPartInfo.h"
 #include "gpopt/base/CUtils.h"
 #include "gpopt/operators/CExpressionHandle.h"
@@ -45,14 +47,14 @@ using namespace gpopt;
 CReqdPropPlan::CReqdPropPlan(CColRefSet *pcrs, CEnfdOrder *peo,
 							 CEnfdDistribution *ped, CEnfdRewindability *per,
 							 CEnfdPartitionPropagation *pepp, CCTEReq *pcter,
-							 EExecEngine ee)
+							 CEnfdExecEngine *pee)
 	: m_pcrs(pcrs),
 	  m_peo(peo),
 	  m_ped(ped),
 	  m_per(per),
 	  m_pepp(pepp),
 	  m_pcter(pcter),
-	  m_ee(ee)
+	  m_pee(pee)
 {
 	GPOS_ASSERT(nullptr != pcrs);
 	GPOS_ASSERT(nullptr != peo);
@@ -79,6 +81,7 @@ CReqdPropPlan::~CReqdPropPlan()
 	CRefCount::SafeRelease(m_per);
 	CRefCount::SafeRelease(m_pepp);
 	CRefCount::SafeRelease(m_pcter);
+	CRefCount::SafeRelease(m_pee);
 }
 
 
@@ -178,9 +181,16 @@ CReqdPropPlan::Compute(CMemoryPool *mp, CExpressionHandle &exprhdl,
 
 	// without an engine every request is the default one, which keeps the
 	// search exactly as it is without engine support
-	m_ee = nullptr != CExternalEngineUtils::Pengine()
-			   ? popPhysical->EeRequired(exprhdl, child_index)
-			   : EeePG;
+	if (nullptr != CExternalEngineUtils::Pengine())
+	{
+		m_pee = GPOS_NEW(mp)
+			CEnfdExecEngine(popPhysical->PesRequired(mp, exprhdl, child_index),
+							popPhysical->Eeem(exprhdl, child_index));
+	}
+	else
+	{
+		m_pee = PeeDefault(mp);
+	}
 }
 
 //---------------------------------------------------------------------------
@@ -209,6 +219,9 @@ CReqdPropPlan::Pps(ULONG ul) const
 
 		case CPropSpec::EpstPartPropagation:
 			return m_pepp->PppsRequired();
+
+		case CPropSpec::EpstExecEngine:
+			return m_pee->PesRequired();
 
 		default:
 			GPOS_ASSERT(!"Invalid property spec index");
@@ -276,7 +289,7 @@ CReqdPropPlan::Equals(const CReqdPropPlan *prpp) const
 	BOOL result = PcrsRequired()->Equals(prpp->PcrsRequired()) &&
 				  Pcter()->Equals(prpp->Pcter()) &&
 				  Peo()->Matches(prpp->Peo()) && Ped()->Matches(prpp->Ped()) &&
-				  Per()->Matches(prpp->Per()) && Ee() == prpp->Ee();
+				  Per()->Matches(prpp->Per()) && Pee()->Matches(prpp->Pee());
 
 	if (result)
 	{
@@ -316,7 +329,7 @@ CReqdPropPlan::HashValue() const
 	ulHash = gpos::CombineHashes(ulHash, m_ped->HashValue());
 	ulHash = gpos::CombineHashes(ulHash, m_per->HashValue());
 	ulHash = gpos::CombineHashes(ulHash, m_pcter->HashValue());
-	ulHash = gpos::CombineHashes(ulHash, (ULONG) m_ee);
+	ulHash = gpos::CombineHashes(ulHash, m_pee->HashValue());
 
 	return ulHash;
 }
@@ -355,7 +368,7 @@ CReqdPropPlan::FSatisfied(const CDrvdPropRelational *pdprel,
 			   pdpplan->Prs()->FSatisfies(this->Per()->PrsRequired()) &&
 			   pdpplan->Ppps()->FSatisfies(this->Pepp()->PppsRequired()) &&
 			   pdpplan->GetCostModel()->FSatisfies(this->Pcter()) &&
-			   pdpplan->Ee() == EeBase(this->Ee());
+			   this->Pee()->FCompatible(pdpplan->Pes());
 	}
 
 	// otherwise, check satisfiability of all plan properties
@@ -389,7 +402,14 @@ CReqdPropPlan::FCompatible(CExpressionHandle &exprhdl, CPhysical *popPhysical,
 		   m_per->FCompatible(pdpplan->Prs()) &&
 		   pdpplan->Ppps()->FSatisfies(m_pepp->PppsRequired()) &&
 		   popPhysical->FProvidesReqdCTEs(exprhdl, m_pcter) &&
-		   pdpplan->Ee() == EeBase(m_ee);
+		   m_pee->FCompatible(pdpplan->Pes());
+}
+
+CEnfdExecEngine *
+CReqdPropPlan::PeeDefault(CMemoryPool *mp)
+{
+	return GPOS_NEW(mp) CEnfdExecEngine(GPOS_NEW(mp) CExecEngineSpec(EeePG),
+										CEnfdExecEngine::EeemSatisfy);
 }
 
 //---------------------------------------------------------------------------
@@ -419,7 +439,8 @@ CReqdPropPlan::PrppEmpty(CMemoryPool *mp)
 		CEnfdPartitionPropagation(pps, CEnfdPartitionPropagation::EppmSatisfy);
 	CCTEReq *pcter = GPOS_NEW(mp) CCTEReq(mp);
 
-	return GPOS_NEW(mp) CReqdPropPlan(pcrs, peo, ped, per, pepp, pcter);
+	return GPOS_NEW(mp)
+		CReqdPropPlan(pcrs, peo, ped, per, pepp, pcter, PeeDefault(mp));
 }
 
 //---------------------------------------------------------------------------
@@ -472,7 +493,12 @@ CReqdPropPlan::OsPrint(IOstream &os) const
 	{
 		os << GetPrintablePtr(m_pepp);
 	}
-	os << "], req engine: [" << SzExecEngine(m_ee) << "]";
+	os << "], req engine: [";
+	if (nullptr != m_pee)
+	{
+		os << (*m_pee);
+	}
+	os << "]";
 
 	return os;
 }
@@ -496,7 +522,10 @@ CReqdPropPlan::UlHashForCostBounding(const CReqdPropPlan *prpp)
 	{
 		ulHash = CombineHashes(ulHash, prpp->Ped()->HashValue());
 	}
-	ulHash = CombineHashes(ulHash, (ULONG) prpp->Ee());
+	if (nullptr != prpp->Pee())
+	{
+		ulHash = CombineHashes(ulHash, prpp->Pee()->HashValue());
+	}
 
 	return ulHash;
 }
@@ -517,11 +546,6 @@ CReqdPropPlan::FEqualForCostBounding(const CReqdPropPlan *prppFst,
 	GPOS_ASSERT(nullptr != prppFst);
 	GPOS_ASSERT(nullptr != prppSnd);
 
-	if (prppFst->Ee() != prppSnd->Ee())
-	{
-		return false;
-	}
-
 	if (nullptr == prppFst->Ped() || nullptr == prppSnd->Ped())
 	{
 		return nullptr == prppFst->Ped() && nullptr == prppSnd->Ped() &&
@@ -529,7 +553,8 @@ CReqdPropPlan::FEqualForCostBounding(const CReqdPropPlan *prppFst,
 	}
 
 	return prppFst->PcrsRequired()->Equals(prppSnd->PcrsRequired()) &&
-		   prppFst->Ped()->Matches(prppSnd->Ped());
+		   prppFst->Ped()->Matches(prppSnd->Ped()) &&
+		   prppFst->Pee()->Matches(prppSnd->Pee());
 }
 
 
@@ -618,8 +643,9 @@ CReqdPropPlan::PrppRemapForCTE(CMemoryPool *mp, CReqdPropPlan *prppProducer,
 	prppProducer->Pcter()->AddRef();
 	CCTEReq *pcter = prppProducer->Pcter();
 
+	prppProducer->Pee()->AddRef();
 	return GPOS_NEW(mp) CReqdPropPlan(pcrsRequired, peo, ped, per, pepp, pcter,
-									  prppProducer->Ee());
+									  prppProducer->Pee());
 }
 
 

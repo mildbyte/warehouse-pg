@@ -2499,8 +2499,8 @@ CTestUtils::PqcGenerate(CMemoryPool *mp, CExpression *pexpr,
 
 	CCTEReq *pcter = COptCtxt::PoctxtFromTLS()->Pcteinfo()->PcterProducers(mp);
 
-	CReqdPropPlan *prpp =
-		GPOS_NEW(mp) CReqdPropPlan(pcrs, peo, ped, per, pepp, pcter);
+	CReqdPropPlan *prpp = GPOS_NEW(mp) CReqdPropPlan(
+		pcrs, peo, ped, per, pepp, pcter, CReqdPropPlan::PeeDefault(mp));
 
 	colref_array->AddRef();
 	CMDNameArray *pdrgpmdname = GPOS_NEW(mp) CMDNameArray(mp);
@@ -2579,8 +2579,8 @@ CTestUtils::PqcGenerate(CMemoryPool *mp, CExpression *pexpr)
 	CEnfdPartitionPropagation *pepp = GPOS_NEW(mp)
 		CEnfdPartitionPropagation(pps, CEnfdPartitionPropagation::EppmSatisfy);
 
-	CReqdPropPlan *prpp =
-		GPOS_NEW(mp) CReqdPropPlan(pcrsOutput, peo, ped, per, pepp, pcter);
+	CReqdPropPlan *prpp = GPOS_NEW(mp) CReqdPropPlan(
+		pcrsOutput, peo, ped, per, pepp, pcter, CReqdPropPlan::PeeDefault(mp));
 
 	CMDNameArray *pdrgpmdname = GPOS_NEW(mp) CMDNameArray(mp);
 	const ULONG length = colref_array->Size();

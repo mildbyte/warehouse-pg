@@ -60,8 +60,11 @@ public:
 
 	// An engine sequence passes the IPC batches of its last child through;
 	// the other children are CTE producers, which output no rows.
-	EExecEngine EeRequired(CExpressionHandle &exprhdl,
-						   ULONG child_index) const override;
+	CExecEngineSpec *PesRequired(CMemoryPool *mp, CExpressionHandle &exprhdl,
+								 ULONG child_index) const override;
+
+	CEnfdExecEngine::EExecEngineMatching Eeem(CExpressionHandle &exprhdl,
+											  ULONG child_index) const override;
 
 	// sensitivity to order of inputs
 	BOOL

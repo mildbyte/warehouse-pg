@@ -49,11 +49,13 @@ OBJS        = CAutoOptCtxt.o \
               CDrvdPropRelational.o \
               CDrvdPropScalar.o \
               CEnfdDistribution.o \
+              CEnfdExecEngine.o \
               CEnfdOrder.o \
               CEnfdPartitionPropagation.o \
               CEnfdProp.o \
               CEnfdRewindability.o \
-              CExecEngine.o \
+              CExecEngineSpec.o \
+              CExternalEngine.o \
               CFunctionProp.o \
               CFunctionalDependency.o \
               CIOUtils.o \

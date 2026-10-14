@@ -41,6 +41,7 @@ public:
 		EpstDistribution,
 		EpstRewindability,
 		EpstPartPropagation,
+		EpstExecEngine,
 
 		EpstSentinel
 	};

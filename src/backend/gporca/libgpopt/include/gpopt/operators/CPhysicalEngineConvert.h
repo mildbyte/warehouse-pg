@@ -103,21 +103,21 @@ public:
 	CRewindabilitySpec *PrsDerive(CMemoryPool *mp,
 								  CExpressionHandle &exprhdl) const override;
 
-	EExecEngine
-	EeRequired(CExpressionHandle &, ULONG) const override
+	CExecEngineSpec *
+	PesRequired(CMemoryPool *mp, CExpressionHandle &, ULONG) const override
 	{
-		// Each side's child must be native to it: no enforcer on top, and (see
-		// CEngine::FCheckReqdProps) no opposite EngineConvert either. That
-		// stops ToEngine and ToPG requesting each other forever, and rules out
-		// a ToEngine straight over a ToPG, which only converts twice. A Motion
-		// between them stays possible: it is a PG operator.
-		return EeeExternal == m_target ? EeePGNative : EeeExternalNative;
+		return GPOS_NEW(mp)
+			CExecEngineSpec(EeeExternal == m_target ? EeePG : EeeExternal);
 	}
 
-	EExecEngine
-	EeDerive(CExpressionHandle &) const override
+	// The child must produce the other engine natively, which stops ToEngine
+	// and ToPG requesting each other forever and rules out a ToEngine
+	// straight over a ToPG, which only converts twice. A Motion between them
+	// stays possible: it is a PG operator.
+	CEnfdExecEngine::EExecEngineMatching
+	Eeem(CExpressionHandle &, ULONG) const override
 	{
-		return m_target;
+		return CEnfdExecEngine::EeemNative;
 	}
 
 	CEnfdProp::EPropEnforcingType EpetOrder(
@@ -131,8 +131,8 @@ public:
 		CExpressionHandle &exprhdl,
 		const CEnfdRewindability *per) const override;
 
-	CEnfdProp::EPropEnforcingType EpetEngine(
-		CExpressionHandle &exprhdl, EExecEngine eeRequired) const override;
+	CEnfdProp::EPropEnforcingType EpetExecEngine(
+		CExpressionHandle &exprhdl, const CEnfdExecEngine *pee) const override;
 
 	BOOL
 	FPassThruStats() const override

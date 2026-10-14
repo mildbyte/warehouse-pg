@@ -15,6 +15,7 @@
 
 #include "gpopt/base/CCTEMap.h"
 #include "gpopt/base/CDrvdPropCtxtPlan.h"
+#include "gpopt/base/CEnfdExecEngine.h"
 #include "gpopt/base/CReqdPropPlan.h"
 #include "gpopt/operators/CExpressionHandle.h"
 #include "gpopt/operators/CPhysical.h"
@@ -50,6 +51,7 @@ CDrvdPropPlan::~CDrvdPropPlan()
 	CRefCount::SafeRelease(m_prs);
 	CRefCount::SafeRelease(m_ppps);
 	CRefCount::SafeRelease(m_pcm);
+	CRefCount::SafeRelease(m_pes);
 }
 
 
@@ -97,7 +99,7 @@ CDrvdPropPlan::Derive(CMemoryPool *mp, CExpressionHandle &exprhdl,
 		m_pds = popPhysical->PdsDerive(mp, exprhdl);
 		m_prs = popPhysical->PrsDerive(mp, exprhdl);
 		m_ppps = popPhysical->PppsDerive(mp, exprhdl);
-		m_ee = popPhysical->EeDerive(exprhdl);
+		m_pes = popPhysical->PesDerive(mp, exprhdl);
 
 		GPOS_ASSERT(CDistributionSpec::EdtAny != m_pds->Edt() &&
 					"CDistributionAny is a require-only, cannot be derived");
@@ -139,7 +141,8 @@ CDrvdPropPlan::CopyCTEProducerPlanProps(CMemoryPool *mp, CDrvdPropCtxt *pdpctxt,
 		m_prs = pdpplan->Prs();
 		// consumers read what the producer's input shares: rows, or the IPC
 		// batches of an engine producer
-		m_ee = pdpplan->Ee();
+		pdpplan->Pes()->AddRef();
+		m_pes = pdpplan->Pes();
 
 		// no need to copy the part index map. return an empty one. This is to
 		// distinguish between a CTE consumer and the inlined expression
@@ -172,7 +175,7 @@ CDrvdPropPlan::FSatisfies(const CReqdPropPlan *prpp) const
 		   m_pds->FSatisfies(prpp->Ped()->PdsRequired()) &&
 		   m_prs->FSatisfies(prpp->Per()->PrsRequired()) &&
 		   m_ppps->FSatisfies(prpp->Pepp()->PppsRequired()) &&
-		   m_pcm->FSatisfies(prpp->Pcter()) && m_ee == EeBase(prpp->Ee());
+		   m_pcm->FSatisfies(prpp->Pcter()) && prpp->Pee()->FCompatible(m_pes);
 }
 
 
@@ -190,7 +193,7 @@ CDrvdPropPlan::HashValue() const
 	ULONG ulHash = gpos::CombineHashes(m_pos->HashValue(), m_pds->HashValue());
 	ulHash = gpos::CombineHashes(ulHash, m_prs->HashValue());
 	ulHash = gpos::CombineHashes(ulHash, m_pcm->HashValue());
-	ulHash = gpos::CombineHashes(ulHash, (ULONG) m_ee);
+	ulHash = gpos::CombineHashes(ulHash, m_pes->HashValue());
 
 	return ulHash;
 }
@@ -208,7 +211,8 @@ CDrvdPropPlan::Equals(const CDrvdPropPlan *pdpplan) const
 {
 	return m_pos->Matches(pdpplan->Pos()) && m_pds->Equals(pdpplan->Pds()) &&
 		   m_prs->Matches(pdpplan->Prs()) && m_ppps->Equals(pdpplan->Ppps()) &&
-		   m_pcm->Equals(pdpplan->GetCostModel()) && m_ee == pdpplan->Ee();
+		   m_pcm->Equals(pdpplan->GetCostModel()) &&
+		   m_pes->Matches(pdpplan->Pes());
 }
 
 //---------------------------------------------------------------------------
@@ -226,7 +230,7 @@ CDrvdPropPlan::OsPrint(IOstream &os) const
 	   << "ORD: " << (*m_pos) << ", DIST: " << (*m_pds)
 	   << ", REWIND: " << (*m_prs) << ", PART PROP:" << (*m_ppps) << ")"
 	   << ", CTE Map: [" << *m_pcm << "]"
-	   << ", ENGINE: " << SzExecEngine(m_ee);
+	   << ", ENGINE: " << (*m_pes);
 
 	return os;
 }

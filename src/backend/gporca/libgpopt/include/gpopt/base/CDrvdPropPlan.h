@@ -16,7 +16,6 @@
 
 #include "gpopt/base/CColRef.h"
 #include "gpopt/base/CDrvdProp.h"
-#include "gpopt/base/CExecEngine.h"
 
 namespace gpopt
 {
@@ -24,6 +23,7 @@ using namespace gpos;
 
 // fwd declaration
 class CDistributionSpec;
+class CExecEngineSpec;
 class CExpressionHandle;
 class COrderSpec;
 class CRewindabilitySpec;
@@ -61,7 +61,8 @@ private:
 	// derived cte map
 	CCTEMap *m_pcm{nullptr};
 
-	EExecEngine m_ee{EeePG};
+	// derived execution engine
+	CExecEngineSpec *m_pes{nullptr};
 
 	// copy CTE producer plan properties from given context to current object
 	void CopyCTEProducerPlanProps(CMemoryPool *mp, CDrvdPropCtxt *pdpctxt,
@@ -124,10 +125,11 @@ public:
 		return m_pcm;
 	}
 
-	EExecEngine
-	Ee() const
+	// execution engine accessor
+	CExecEngineSpec *
+	Pes() const
 	{
-		return m_ee;
+		return m_pes;
 	}
 
 	// hash function

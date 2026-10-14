@@ -52,10 +52,11 @@ public:
 	// An engine motion over a ToEngine would ship rows PG can ship itself
 	// through a region that only converts them, so its input must be a real
 	// engine operator.
-	EExecEngine
-	EeRequired(CExpressionHandle &, ULONG) const override
+	CEnfdExecEngine::EExecEngineMatching
+	Eeem(CExpressionHandle &, ULONG) const override
 	{
-		return EeeExternal == ExecEngine() ? EeeExternalNative : ExecEngine();
+		return EeeExternal == ExecEngine() ? CEnfdExecEngine::EeemNative
+										   : CEnfdExecEngine::EeemSatisfy;
 	}
 
 	// check if optimization contexts is valid

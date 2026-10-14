@@ -81,16 +81,23 @@ public:
 
 	// An engine producer shares the IPC batches of the region below it, so
 	// consumers read them back as engine batches; to its parent it yields no rows
-	EExecEngine
-	EeRequired(CExpressionHandle &, ULONG) const override
+	CEnfdExecEngine::EExecEngineMatching
+	Eeem(CExpressionHandle &, ULONG) const override
 	{
-		return EeeExternal == ExecEngine() ? EeeExternalNative : ExecEngine();
+		return EeeExternal == ExecEngine() ? CEnfdExecEngine::EeemNative
+										   : CEnfdExecEngine::EeemSatisfy;
 	}
 
-	EExecEngine
-	EeDerive(CExpressionHandle &) const override
+	CExecEngineSpec *
+	PesDerive(CMemoryPool *mp, CExpressionHandle &) const override
 	{
-		return EeePG;
+		return GPOS_NEW(mp) CExecEngineSpec(EeePG);
+	}
+
+	BOOL
+	FOutputInOwnEngine() const override
+	{
+		return false;
 	}
 
 	// sensitivity to order of inputs

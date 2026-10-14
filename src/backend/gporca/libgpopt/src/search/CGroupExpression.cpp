@@ -18,7 +18,7 @@
 #include "gpos/task/CAutoSuspendAbort.h"
 #include "gpos/task/CWorker.h"
 
-#include "gpopt/base/CExecEngine.h"
+#include "gpopt/base/CExternalEngine.h"
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/base/COptimizationContext.h"
 #include "gpopt/base/CUtils.h"

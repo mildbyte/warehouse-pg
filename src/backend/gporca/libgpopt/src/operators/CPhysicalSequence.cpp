@@ -84,15 +84,21 @@ CPhysicalSequence::Matches(COperator *pop) const
 		   ExecEngine() == CPhysical::PopConvert(pop)->ExecEngine();
 }
 
-EExecEngine
-CPhysicalSequence::EeRequired(CExpressionHandle &exprhdl,
-							  ULONG child_index) const
+CExecEngineSpec *
+CPhysicalSequence::PesRequired(CMemoryPool *mp, CExpressionHandle &exprhdl,
+							   ULONG child_index) const
 {
-	if (EeeExternal != ExecEngine())
-	{
-		return ExecEngine();
-	}
-	return child_index + 1 == exprhdl.Arity() ? EeeExternalNative : EeePG;
+	BOOL fEngineChild =
+		EeeExternal == ExecEngine() && child_index + 1 == exprhdl.Arity();
+	return GPOS_NEW(mp) CExecEngineSpec(fEngineChild ? EeeExternal : EeePG);
+}
+
+CEnfdExecEngine::EExecEngineMatching
+CPhysicalSequence::Eeem(CExpressionHandle &exprhdl, ULONG child_index) const
+{
+	return EeeExternal == ExecEngine() && child_index + 1 == exprhdl.Arity()
+			   ? CEnfdExecEngine::EeemNative
+			   : CEnfdExecEngine::EeemSatisfy;
 }
 
 //---------------------------------------------------------------------------

@@ -34,7 +34,7 @@ extern "C" {
 
 #include "gpdbcost/CCostModelGPDB.h"
 #include "gpopt/base/CAutoOptCtxt.h"
-#include "gpopt/base/CExecEngine.h"
+#include "gpopt/base/CExternalEngine.h"
 #include "gpopt/config/CConfigParamMapping.h"
 #include "gpopt/engine/CCTEConfig.h"
 #include "gpopt/engine/CEnumeratorConfig.h"

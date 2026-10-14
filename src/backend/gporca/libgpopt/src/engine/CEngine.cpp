@@ -23,6 +23,7 @@
 #include "gpopt/base/CCostContext.h"
 #include "gpopt/base/CDrvdPropCtxtPlan.h"
 #include "gpopt/base/CEnfdPartitionPropagation.h"
+#include "gpopt/base/CExternalEngine.h"
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/base/COptimizationContext.h"
 #include "gpopt/base/CQueryContext.h"
@@ -553,29 +554,28 @@ CEngine::FOptimizeChild(
 	// native context of the other engine. Optimizing the operator under this
 	// context would redo that work per required-property set (6.6x the jobs
 	// on TPC-H Q02), so add the group's conversion, which every context
-	// shares, and skip the operator. Only conversions derive an engine other
-	// than their operator's, and CTE producers and consumers, whose engine is
-	// that of the producer's input.
+	// shares, and skip the operator. A conversion under the request of the
+	// engine it converts from is ruled out in FCheckReqdProps anyway.
+	CReqdPropPlan *prppChild = pocChild->Prpp();
 	if (popChild->FPhysical() &&
 		COperator::EopPhysicalEngineConvert != popChild->Eopid() &&
-		COperator::EopPhysicalCTEProducer != popChild->Eopid() &&
-		COperator::EopPhysicalCTEConsumer != popChild->Eopid() &&
+		CPhysical::PopConvert(popChild)->FOutputInOwnEngine() &&
 		CPhysical::PopConvert(popChild)->ExecEngine() !=
-			EeBase(pocChild->Prpp()->Ee()))
+			prppChild->Pee()->PesRequired()->Eee())
 	{
-		CReqdPropPlan *prpp = pocChild->Prpp();
-		if (!FEeNative(prpp->Ee()) &&
-			CExternalEngineUtils::FColsSupported(prpp->PcrsRequired()))
+		if (CEnfdExecEngine::EeemNative != prppChild->Pee()->Eeem() &&
+			CExternalEngineUtils::FColsSupported(prppChild->PcrsRequired()))
 		{
 			CBinding binding;
 			CExpression *pexpr =
 				binding.PexprExtract(m_mp, pgexprChild, m_pexprEnforcerPattern,
 									 nullptr /* pexprLast */);
+			CExpressionHandle exprhdl(m_mp);
+			exprhdl.Attach(pgexprChild);
 			CExpressionArray *pdrgpexpr = GPOS_NEW(m_mp) CExpressionArray(m_mp);
-			pdrgpexpr->Append(GPOS_NEW(m_mp) CExpression(
-				m_mp,
-				GPOS_NEW(m_mp) CPhysicalEngineConvert(m_mp, EeBase(prpp->Ee())),
-				pexpr));
+			prppChild->Pee()->PesRequired()->AppendEnforcers(
+				m_mp, exprhdl, prppChild, pdrgpexpr, pexpr);
+			pexpr->Release();
 			AddEnforcers(pgexprChild, pdrgpexpr);
 			pdrgpexpr->Release();
 		}
@@ -2172,8 +2172,8 @@ CEngine::FCheckEnfdProps(CMemoryPool *mp, CGroupExpression *pgexpr,
 		prpp->Pepp()->Epet(exprhdl, popPhysical, fPartPropagationReqd);
 
 	// get execution engine enforcing type
-	CEnfdProp::EPropEnforcingType epetEngine =
-		popPhysical->EpetEngine(exprhdl, prpp->Ee());
+	CEnfdProp::EPropEnforcingType epetExecEngine =
+		prpp->Pee()->Epet(exprhdl, popPhysical);
 
 	// Skip adding enforcers entirely if any property determines it to be
 	// 'prohibited'. In this way, a property may veto out the creation of an
@@ -2184,8 +2184,7 @@ CEngine::FCheckEnfdProps(CMemoryPool *mp, CGroupExpression *pgexpr,
 	// decide to add it. And if E is added, it is possible for E to consider both
 	// G and H as its child.
 	if (FProhibited(epetOrder, epetDistribution, epetRewindability,
-					epetPartitionPropagation) ||
-		CEnfdProp::EpetProhibited == epetEngine)
+					epetPartitionPropagation, epetExecEngine))
 	{
 		pcc->Release();
 		return false;
@@ -2211,7 +2210,7 @@ CEngine::FCheckEnfdProps(CMemoryPool *mp, CGroupExpression *pgexpr,
 								  epetPartitionPropagation, exprhdl);
 	// under an engine request, each motion also gets a twin shipping engine
 	// batches, which spares the conversions on both sides of it
-	if (EeeExternal == EeBase(prpp->Ee()))
+	if (EeeExternal == prpp->Pee()->PesRequired()->Eee())
 	{
 		const ULONG ulEnforcers = pdrgpexprEnforcers->Size();
 		for (ULONG ul = 0; ul < ulEnforcers; ul++)
@@ -2229,13 +2228,8 @@ CEngine::FCheckEnfdProps(CMemoryPool *mp, CGroupExpression *pgexpr,
 			}
 		}
 	}
-	if (CEnfdProp::FEnforce(epetEngine))
-	{
-		pexpr->AddRef();
-		pdrgpexprEnforcers->Append(GPOS_NEW(mp) CExpression(
-			mp, GPOS_NEW(mp) CPhysicalEngineConvert(mp, EeBase(prpp->Ee())),
-			pexpr));
-	}
+	prpp->Pee()->AppendEnforcers(mp, prpp, pdrgpexprEnforcers, pexpr,
+								 epetExecEngine, exprhdl);
 
 	if (0 < pdrgpexprEnforcers->Size())
 	{
@@ -2246,8 +2240,7 @@ CEngine::FCheckEnfdProps(CMemoryPool *mp, CGroupExpression *pgexpr,
 	pcc->Release();
 
 	return FOptimize(epetOrder, epetDistribution, epetRewindability,
-					 epetPartitionPropagation) &&
-		   CEnfdProp::FOptimize(epetEngine);
+					 epetPartitionPropagation, epetExecEngine);
 }
 
 //---------------------------------------------------------------------------
@@ -2288,12 +2281,14 @@ BOOL
 CEngine::FOptimize(CEnfdProp::EPropEnforcingType epetOrder,
 				   CEnfdProp::EPropEnforcingType epetDistribution,
 				   CEnfdProp::EPropEnforcingType epetRewindability,
-				   CEnfdProp::EPropEnforcingType epetPropagation)
+				   CEnfdProp::EPropEnforcingType epetPropagation,
+				   CEnfdProp::EPropEnforcingType epetExecEngine)
 {
 	return CEnfdProp::FOptimize(epetOrder) &&
 		   CEnfdProp::FOptimize(epetDistribution) &&
 		   CEnfdProp::FOptimize(epetRewindability) &&
-		   CEnfdProp::FOptimize(epetPropagation);
+		   CEnfdProp::FOptimize(epetPropagation) &&
+		   CEnfdProp::FOptimize(epetExecEngine);
 }
 
 //---------------------------------------------------------------------------
@@ -2308,12 +2303,14 @@ BOOL
 CEngine::FProhibited(CEnfdProp::EPropEnforcingType epetOrder,
 					 CEnfdProp::EPropEnforcingType epetDistribution,
 					 CEnfdProp::EPropEnforcingType epetRewindability,
-					 CEnfdProp::EPropEnforcingType epetPropagation)
+					 CEnfdProp::EPropEnforcingType epetPropagation,
+					 CEnfdProp::EPropEnforcingType epetExecEngine)
 {
 	return (CEnfdProp::EpetProhibited == epetOrder ||
 			CEnfdProp::EpetProhibited == epetDistribution ||
 			CEnfdProp::EpetProhibited == epetRewindability ||
-			CEnfdProp::EpetProhibited == epetPropagation);
+			CEnfdProp::EpetProhibited == epetPropagation ||
+			CEnfdProp::EpetProhibited == epetExecEngine);
 }
 
 
@@ -2387,11 +2384,15 @@ CEngine::FCheckReqdProps(CExpressionHandle &exprhdl, CReqdPropPlan *prpp,
 		return false;
 	}
 
-	// an engine conversion optimizing its own group under the engine it
-	// converts from would request the same context from itself
+	// check if an engine conversion is passed a native request or one for
+	// the engine it converts from; this check is required to avoid
+	// self-deadlocks, i.e. the conversion optimizing its own group under the
+	// context it requests from it
+	CEnfdExecEngine *pee = prpp->Pee();
 	if (COperator::EopPhysicalEngineConvert == op_id &&
-		CPhysicalEngineConvert::PopConvert(popPhysical)->EeTarget() !=
-			prpp->Ee())
+		(CEnfdExecEngine::EeemNative == pee->Eeem() ||
+		 CPhysicalEngineConvert::PopConvert(popPhysical)->EeTarget() !=
+			 pee->PesRequired()->Eee()))
 	{
 		return false;
 	}
@@ -2402,11 +2403,6 @@ CEngine::FCheckReqdProps(CExpressionHandle &exprhdl, CReqdPropPlan *prpp,
 		 (COperator::EopPhysicalTableScan == op_id &&
 		  EeeExternal == popPhysical->ExecEngine())) &&
 		!CExternalEngineUtils::FColsSupported(prpp->PcrsRequired()))
-	{
-		return false;
-	}
-
-	if (FEeNative(prpp->Ee()) && COperator::EopPhysicalEngineConvert == op_id)
 	{
 		return false;
 	}

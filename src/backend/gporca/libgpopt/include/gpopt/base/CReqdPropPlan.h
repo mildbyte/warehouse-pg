@@ -14,7 +14,6 @@
 #include "gpos/base.h"
 
 #include "gpopt/base/CColRef.h"
-#include "gpopt/base/CExecEngine.h"
 #include "gpopt/base/CReqdProp.h"
 
 namespace gpopt
@@ -26,6 +25,7 @@ class CColRefSet;
 class CDrvdPropRelational;
 class CDrvdPropPlan;
 class CEnfdOrder;
+class CEnfdExecEngine;
 class CEnfdDistribution;
 class CEnfdRewindability;
 class CEnfdPartitionPropagation;
@@ -64,7 +64,8 @@ private:
 	// required ctes
 	CCTEReq *m_pcter{nullptr};
 
-	EExecEngine m_ee{EeePG};
+	// required execution engine
+	CEnfdExecEngine *m_pee{nullptr};
 
 public:
 	CReqdPropPlan(const CReqdPropPlan &) = delete;
@@ -75,7 +76,7 @@ public:
 	// ctor
 	CReqdPropPlan(CColRefSet *pcrs, CEnfdOrder *peo, CEnfdDistribution *ped,
 				  CEnfdRewindability *per, CEnfdPartitionPropagation *pepp,
-				  CCTEReq *pcter, EExecEngine ee = EeePG);
+				  CCTEReq *pcter, CEnfdExecEngine *pee);
 
 	// dtor
 	~CReqdPropPlan() override;
@@ -145,10 +146,11 @@ public:
 		return m_pcter;
 	}
 
-	EExecEngine
-	Ee() const
+	// required execution engine accessor
+	CEnfdExecEngine *
+	Pee() const
 	{
-		return m_ee;
+		return m_pee;
 	}
 
 	// given a property spec type, return the corresponding property spec member
@@ -184,6 +186,9 @@ public:
 
 	//generate empty required properties
 	static CReqdPropPlan *PrppEmpty(CMemoryPool *mp);
+
+	// a request for PG output, the request of every plan without an engine
+	static CEnfdExecEngine *PeeDefault(CMemoryPool *mp);
 
 	// hash function used for cost bounding
 	static ULONG UlHashForCostBounding(const CReqdPropPlan *prpp);

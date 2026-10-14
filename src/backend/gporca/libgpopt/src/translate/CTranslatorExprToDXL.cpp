@@ -2482,7 +2482,7 @@ CTranslatorExprToDXL::PdxlnCTEConsumer(
 	// the consumer of an engine producer reads IPC batches, which the region
 	// above decodes
 	if (EeeExternal ==
-		CDrvdPropPlan::Pdpplan(pexprCTEConsumer->PdpDerive())->Ee())
+		CDrvdPropPlan::Pdpplan(pexprCTEConsumer->PdpDerive())->Pes()->Eee())
 	{
 		pdxlnCTEConsumer = PdxlnEngineConvert(
 			GetProperties(pexprCTEConsumer), true /*fToEngine*/, true /*fIpc*/,

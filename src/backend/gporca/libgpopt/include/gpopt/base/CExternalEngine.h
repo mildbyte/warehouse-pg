@@ -1,62 +1,17 @@
 //---------------------------------------------------------------------------
-//	CExecEngine.h
+//	CExternalEngine.h
 //
-//	Execution engine plan property: the PG executor or the external engine
-//	(see IExternalEngine). Operators running in the external engine require
-//	and derive EeeExternal; the CPhysicalEngineConvert enforcer switches
-//	between engines and is where the conversion cost lives.
+//	Registry of the external engine (see IExternalEngine) and the hooks the
+//	search calls into it.
 //---------------------------------------------------------------------------
-#ifndef GPOPT_CExecEngine_H
-#define GPOPT_CExecEngine_H
+#ifndef GPOPT_CExternalEngine_H
+#define GPOPT_CExternalEngine_H
 
 #include "gpos/base.h"
 
 namespace gpopt
 {
 using namespace gpos;
-
-enum EExecEngine
-{
-	EeePG = 0,
-	EeeExternal,
-
-	// Requirement-only variants: the engine must be produced natively, not by
-	// a conversion. An EngineConvert asks its child for these, otherwise
-	// ToPG/ToEngine would request each other's contexts and deadlock the search
-	// (Orca breaks the same cycle for Motion/Sort with ANY/empty requests).
-	EeePGNative,
-	EeeExternalNative,
-
-	EeeSentinel
-};
-
-inline EExecEngine
-EeBase(EExecEngine ee)
-{
-	return (EeeExternal == ee || EeeExternalNative == ee) ? EeeExternal : EeePG;
-}
-
-inline BOOL
-FEeNative(EExecEngine ee)
-{
-	return EeePGNative == ee || EeeExternalNative == ee;
-}
-
-inline const CHAR *
-SzExecEngine(EExecEngine ee)
-{
-	switch (ee)
-	{
-		case EeeExternal:
-			return "External";
-		case EeePGNative:
-			return "PG (native)";
-		case EeeExternalNative:
-			return "External (native)";
-		default:
-			return "PG";
-	}
-}
 
 class CColRefSet;
 class CExpression;
@@ -106,4 +61,4 @@ public:
 
 }  // namespace gpopt
 
-#endif	// !GPOPT_CExecEngine_H
+#endif	// !GPOPT_CExternalEngine_H

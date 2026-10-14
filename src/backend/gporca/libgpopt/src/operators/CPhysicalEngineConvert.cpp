@@ -139,11 +139,11 @@ CPhysicalEngineConvert::EpetRewindability(CExpressionHandle &exprhdl,
 }
 
 CEnfdProp::EPropEnforcingType
-CPhysicalEngineConvert::EpetEngine(CExpressionHandle &,
-								   EExecEngine eeRequired) const
+CPhysicalEngineConvert::EpetExecEngine(CExpressionHandle &,
+									   const CEnfdExecEngine *pee) const
 {
-	return eeRequired == m_target ? CEnfdProp::EpetUnnecessary
-								  : CEnfdProp::EpetProhibited;
+	return pee->PesRequired()->Eee() == m_target ? CEnfdProp::EpetUnnecessary
+												 : CEnfdProp::EpetProhibited;
 }
 
 IOstream &

@@ -24,7 +24,7 @@
 #include "gpos/base.h"
 #include "gpos/common/CRefCount.h"
 
-#include "gpopt/base/CExecEngine.h"
+#include "gpopt/base/CExternalEngine.h"
 #include "gpopt/cost/ICostModel.h"
 
 

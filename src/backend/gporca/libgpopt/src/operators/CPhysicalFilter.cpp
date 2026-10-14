@@ -410,17 +410,17 @@ CPhysicalFilter::EpetRewindability(CExpressionHandle &exprhdl,
 
 // A constant-true filter translates to no plan node, so over a conversion
 // it would leave ToEngine straight over ToPG, which
-// CPhysicalEngineConvert::EeRequired rules out. Its child must be native to
-// its own engine instead.
-EExecEngine
-CPhysicalFilter::EeRequired(CExpressionHandle &exprhdl, ULONG child_index) const
+// CPhysicalEngineConvert::Eeem rules out. Its child must be native to its
+// own engine instead.
+CEnfdExecEngine::EExecEngineMatching
+CPhysicalFilter::Eeem(CExpressionHandle &exprhdl, ULONG child_index) const
 {
 	if (0 == child_index &&
 		CUtils::FScalarConstTrue(exprhdl.PexprScalarRepChild(1)))
 	{
-		return EeeExternal == ExecEngine() ? EeeExternalNative : EeePGNative;
+		return CEnfdExecEngine::EeemNative;
 	}
-	return CPhysical::EeRequired(exprhdl, child_index);
+	return CEnfdExecEngine::EeemSatisfy;
 }
 
 // EOF

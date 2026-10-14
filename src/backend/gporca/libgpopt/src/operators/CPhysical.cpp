@@ -1040,15 +1040,29 @@ CPhysical::PppsDerive(CMemoryPool *mp, CExpressionHandle &exprhdl) const
 	return pps_result;
 }
 
-CEnfdProp::EPropEnforcingType
-CPhysical::EpetEngine(CExpressionHandle &exprhdl, EExecEngine eeRequired) const
+CExecEngineSpec *
+CPhysical::PesRequired(CMemoryPool *mp, CExpressionHandle &, ULONG) const
 {
-	if (CDrvdPropPlan::Pdpplan(exprhdl.Pdp())->Ee() == EeBase(eeRequired))
+	return GPOS_NEW(mp) CExecEngineSpec(m_exec_engine);
+}
+
+CExecEngineSpec *
+CPhysical::PesDerive(CMemoryPool *mp, CExpressionHandle &) const
+{
+	return GPOS_NEW(mp) CExecEngineSpec(m_exec_engine);
+}
+
+CEnfdProp::EPropEnforcingType
+CPhysical::EpetExecEngine(CExpressionHandle &exprhdl,
+						  const CEnfdExecEngine *pee) const
+{
+	if (pee->FCompatible(CDrvdPropPlan::Pdpplan(exprhdl.Pdp())->Pes()))
 	{
 		return CEnfdProp::EpetUnnecessary;
 	}
-	return FEeNative(eeRequired) ? CEnfdProp::EpetProhibited
-								 : CEnfdProp::EpetRequired;
+	return CEnfdExecEngine::EeemNative == pee->Eeem()
+			   ? CEnfdProp::EpetProhibited
+			   : CEnfdProp::EpetRequired;
 }
 
 // EOF
