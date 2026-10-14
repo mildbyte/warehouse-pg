@@ -43,6 +43,7 @@
 #include "gpopt/operators/CLogicalSequenceProject.h"
 #include "gpopt/operators/CLogicalSetOp.h"
 #include "gpopt/operators/CLogicalUnary.h"
+#include "gpopt/operators/CPhysical.h"
 #include "gpopt/operators/CPhysicalAgg.h"
 #include "gpopt/operators/CPhysicalCTEConsumer.h"
 #include "gpopt/operators/CPhysicalCTEProducer.h"
@@ -1515,7 +1516,8 @@ CUtils::Equals(const CExpression *pexprLeft, const CExpression *pexprRight)
 
 	// compare number of children and root operators
 	if (pexprLeft->Arity() != pexprRight->Arity() ||
-		!pexprLeft->Pop()->Matches(pexprRight->Pop()))
+		!pexprLeft->Pop()->Matches(pexprRight->Pop()) ||
+		!CPhysical::FMatchExecEngine(pexprLeft->Pop(), pexprRight->Pop()))
 	{
 		return false;
 	}

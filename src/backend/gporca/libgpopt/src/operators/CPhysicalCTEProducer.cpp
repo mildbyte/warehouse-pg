@@ -325,7 +325,6 @@ CPhysicalCTEProducer::Matches(COperator *pop) const
 		CPhysicalCTEProducer::PopConvert(pop);
 
 	return m_id == popCTEProducer->UlCTEId() &&
-		   ExecEngine() == popCTEProducer->ExecEngine() &&
 		   m_pdrgpcr->Equals(popCTEProducer->Pdrgpcr());
 }
 

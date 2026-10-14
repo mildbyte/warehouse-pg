@@ -71,8 +71,7 @@ CPhysicalSort::Matches(COperator *pop) const
 	}
 
 	CPhysicalSort *popSort = CPhysicalSort::PopConvert(pop);
-	return popSort->ExecEngine() == ExecEngine() &&
-		   m_pos->Matches(popSort->Pos());
+	return m_pos->Matches(popSort->Pos());
 }
 
 

@@ -22,6 +22,7 @@
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/base/COptimizationContext.h"
 #include "gpopt/base/CUtils.h"
+#include "gpopt/operators/CPhysical.h"
 #include "gpopt/operators/CPhysicalAgg.h"
 #include "gpopt/optimizer/COptimizerConfig.h"
 #include "gpopt/search/CBinding.h"
@@ -903,7 +904,8 @@ CGroupExpression::Matches(const CGroupExpression *pgexpr) const
 	}
 
 	// match operators
-	if (!m_pop->Matches(pgexpr->m_pop))
+	if (!m_pop->Matches(pgexpr->m_pop) ||
+		!CPhysical::FMatchExecEngine(m_pop, pgexpr->m_pop))
 	{
 		return false;
 	}
@@ -948,7 +950,7 @@ CGroupExpression::HashValue(COperator *pop, CGroupArray *pdrgpgroup)
 	GPOS_ASSERT(nullptr != pop);
 	GPOS_ASSERT(nullptr != pdrgpgroup);
 
-	ULONG ulHash = pop->HashValue();
+	ULONG ulHash = CPhysical::HashExecEngine(pop, pop->HashValue());
 
 	ULONG arity = pdrgpgroup->Size();
 	for (ULONG i = 0; i < arity; i++)

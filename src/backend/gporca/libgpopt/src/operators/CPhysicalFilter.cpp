@@ -331,8 +331,8 @@ CPhysicalFilter::PrsDerive(CMemoryPool *mp, CExpressionHandle &exprhdl) const
 BOOL
 CPhysicalFilter::Matches(COperator *pop) const
 {
-	return Eopid() == pop->Eopid() &&
-		   CPhysical::PopConvert(pop)->ExecEngine() == ExecEngine();
+	// filter doesn't contain any members as of now
+	return Eopid() == pop->Eopid();
 }
 
 

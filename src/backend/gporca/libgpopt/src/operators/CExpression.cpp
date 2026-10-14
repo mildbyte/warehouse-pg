@@ -32,6 +32,7 @@
 #include "gpopt/operators/COperator.h"
 #include "gpopt/operators/CPattern.h"
 #include "gpopt/operators/CPatternNode.h"
+#include "gpopt/operators/CPhysical.h"
 #include "gpopt/operators/CPhysicalCTEProducer.h"
 #include "gpopt/search/CGroupExpression.h"
 #include "naucrates/statistics/CStatistics.h"
@@ -790,7 +791,8 @@ CExpression::Matches(CExpression *pexpr) const
 	GPOS_CHECK_STACK_SIZE;
 
 	// check local operator
-	if (!Pop()->Matches(pexpr->Pop()))
+	if (!Pop()->Matches(pexpr->Pop()) ||
+		!CPhysical::FMatchExecEngine(Pop(), pexpr->Pop()))
 	{
 		return false;
 	}
@@ -1148,7 +1150,8 @@ CExpression::HashValue(const CExpression *pexpr)
 {
 	GPOS_CHECK_STACK_SIZE;
 
-	ULONG ulHash = pexpr->Pop()->HashValue();
+	ULONG ulHash =
+		CPhysical::HashExecEngine(pexpr->Pop(), pexpr->Pop()->HashValue());
 
 	const ULONG arity = pexpr->Arity();
 	for (ULONG ul = 0; ul < arity; ul++)
@@ -1168,7 +1171,8 @@ CExpression::UlHashDedup(const CExpression *pexpr)
 {
 	GPOS_CHECK_STACK_SIZE;
 
-	ULONG ulHash = pexpr->Pop()->HashValue();
+	ULONG ulHash =
+		CPhysical::HashExecEngine(pexpr->Pop(), pexpr->Pop()->HashValue());
 
 	const ULONG arity = pexpr->Arity();
 	for (ULONG ul = 0; ul < arity; ul++)

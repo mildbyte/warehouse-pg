@@ -1066,3 +1066,27 @@ CPhysical::EpetExecEngine(CExpressionHandle &exprhdl,
 }
 
 // EOF
+
+BOOL
+CPhysical::FMatchExecEngine(const COperator *popFst, const COperator *popSnd)
+{
+	if (!popFst->FPhysical() || !popSnd->FPhysical())
+	{
+		return true;
+	}
+	return CPhysical::PopConvert(const_cast<COperator *>(popFst))
+			   ->ExecEngine() ==
+		   CPhysical::PopConvert(const_cast<COperator *>(popSnd))->ExecEngine();
+}
+
+ULONG
+CPhysical::HashExecEngine(const COperator *pop, ULONG ulHash)
+{
+	if (!pop->FPhysical())
+	{
+		return ulHash;
+	}
+	EExecEngine ee =
+		CPhysical::PopConvert(const_cast<COperator *>(pop))->ExecEngine();
+	return EeePG == ee ? ulHash : CombineHashes(ulHash, ee);
+}

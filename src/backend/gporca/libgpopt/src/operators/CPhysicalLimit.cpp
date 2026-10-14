@@ -78,8 +78,7 @@ CPhysicalLimit::Matches(COperator *pop) const
 		CPhysicalLimit *popLimit = CPhysicalLimit::PopConvert(pop);
 
 		if (popLimit->FGlobal() == m_fGlobal &&
-			popLimit->FHasCount() == m_fHasCount &&
-			popLimit->ExecEngine() == ExecEngine())
+			popLimit->FHasCount() == m_fHasCount)
 		{
 			// match if order specs match
 			return m_pos->Matches(popLimit->m_pos);

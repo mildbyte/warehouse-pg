@@ -419,6 +419,13 @@ public:
 		return m_exec_engine;
 	}
 
+	// Operator identity covers the engine: an engine twin and its PG original
+	// are different memo entries even though the operator's Matches and
+	// HashValue ignore it.
+	static BOOL FMatchExecEngine(const COperator *popFst,
+								 const COperator *popSnd);
+	static ULONG HashExecEngine(const COperator *pop, ULONG ulHash);
+
 	void
 	SetExecEngine(EExecEngine ee)
 	{

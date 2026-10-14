@@ -80,8 +80,7 @@ CPhysicalSequence::~CPhysicalSequence()
 BOOL
 CPhysicalSequence::Matches(COperator *pop) const
 {
-	return Eopid() == pop->Eopid() &&
-		   ExecEngine() == CPhysical::PopConvert(pop)->ExecEngine();
+	return Eopid() == pop->Eopid();
 }
 
 CExecEngineSpec *
