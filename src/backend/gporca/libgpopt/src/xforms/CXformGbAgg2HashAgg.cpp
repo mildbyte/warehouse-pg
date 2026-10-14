@@ -14,7 +14,6 @@
 #include "gpos/base.h"
 
 #include "gpopt/base/CExecEngine.h"
-
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/operators/CLogicalGbAgg.h"
 #include "gpopt/operators/CPatternLeaf.h"
@@ -104,8 +103,8 @@ CXformGbAgg2HashAgg::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	// hash agg is not used if agg function does not have prelim func
 	// hash agg is not used for ordered aggregate
 	// evaluating these conditions needs a deep tree in the project list
-	// (DataFusion's hash aggregate does evaluate DISTINCT aggregates, so the
-	// Arrow alternative below is still offered)
+	// (the engine's hash aggregate does evaluate DISTINCT aggregates, so the
+	// Engine alternative below is still offered)
 	BOOL fPG = FApplicable(pexpr);
 
 	CMemoryPool *mp = pxfctxt->Pmp();
@@ -144,10 +143,10 @@ CXformGbAgg2HashAgg::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 
 	BOOL fDQA = nullptr != pdrgpcrArgDQA && 0 != pdrgpcrArgDQA->Size();
 	if (COperator::EgbaggtypeIntermediate != popAgg->Egbaggtype() &&
-		CArrowEngineUtils::FEnabled(EaopHashAgg) &&
-		CArrowEngineUtils::FLargeEnough(pexpr) &&
-		CArrowEngineUtils::FColsSupported(pexpr->DeriveOutputColumns()) &&
-		CArrowEngineUtils::FScalarSupported(pexprScalar))
+		CExternalEngineUtils::FEnabled(EeopHashAgg) &&
+		CExternalEngineUtils::FLargeEnough(pexpr) &&
+		CExternalEngineUtils::FColsSupported(pexpr->DeriveOutputColumns()) &&
+		CExternalEngineUtils::FScalarSupported(pexprScalar))
 	{
 		colref_array->AddRef();
 		pexprRel->AddRef();
@@ -156,15 +155,15 @@ CXformGbAgg2HashAgg::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 		{
 			pdrgpcrArgDQA->AddRef();
 		}
-		CPhysicalHashAgg *popArrow = GPOS_NEW(mp) CPhysicalHashAgg(
+		CPhysicalHashAgg *popEngine = GPOS_NEW(mp) CPhysicalHashAgg(
 			mp, colref_array, popAgg->PdrgpcrMinimal(), popAgg->Egbaggtype(),
 			popAgg->FGeneratesDuplicates(), fDQA ? pdrgpcrArgDQA : nullptr,
 			CXformUtils::FMultiStageAgg(pexpr),
 			CXformUtils::FAggGenBySplitDQAXform(pexpr), popAgg->AggStage(),
 			!CXformUtils::FLocalAggCreatedByEagerAggXform(pexpr));
-		popArrow->SetExecEngine(EeeArrow);
+		popEngine->SetExecEngine(EeeExternal);
 		pxfres->Add(GPOS_NEW(mp)
-						CExpression(mp, popArrow, pexprRel, pexprScalar));
+						CExpression(mp, popEngine, pexprRel, pexprScalar));
 	}
 }
 

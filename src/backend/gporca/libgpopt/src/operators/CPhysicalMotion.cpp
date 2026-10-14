@@ -11,13 +11,12 @@
 
 #include "gpopt/operators/CPhysicalMotion.h"
 
-#include "gpopt/base/CUtils.h"
-
 #include "gpos/base.h"
 
 #include "gpopt/base/CDistributionSpecAny.h"
 #include "gpopt/base/CDistributionSpecRandom.h"
 #include "gpopt/base/COptCtxt.h"
+#include "gpopt/base/CUtils.h"
 #include "gpopt/operators/CExpressionHandle.h"
 #include "gpopt/search/CMemo.h"
 
@@ -51,9 +50,9 @@ CPhysicalMotion::FValidContext(CMemoryPool *, COptimizationContext *poc,
 	}
 
 	// Over replicated input, a redistribution becomes a local hash filter
-	// (duplicate-sensitive motion), which an Arrow motion cannot express.
+	// (duplicate-sensitive motion), which an engine motion cannot express.
 	// The enforcer only checked the group expression that added it.
-	if (EeeArrow == ExecEngine() &&
+	if (EeeExternal == ExecEngine() &&
 		COperator::EopPhysicalMotionHashDistribute == Eopid() &&
 		CUtils::FDuplicateHazardDistributionSpec(pdpplanChild->Pds()))
 	{

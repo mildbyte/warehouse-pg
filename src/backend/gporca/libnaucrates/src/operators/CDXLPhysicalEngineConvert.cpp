@@ -11,8 +11,8 @@ using namespace gpos;
 using namespace gpdxl;
 
 CDXLPhysicalEngineConvert::CDXLPhysicalEngineConvert(CMemoryPool *mp,
-													 BOOL to_arrow, BOOL ipc)
-	: CDXLPhysical(mp), m_to_arrow(to_arrow), m_ipc(ipc)
+													 BOOL to_engine, BOOL ipc)
+	: CDXLPhysical(mp), m_to_engine(to_engine), m_ipc(ipc)
 {
 }
 
@@ -37,7 +37,8 @@ CDXLPhysicalEngineConvert::SerializeToDXL(CXMLSerializer *xml_serializer,
 	xml_serializer->OpenElement(
 		CDXLTokens::GetDXLTokenStr(EdxltokenNamespacePrefix), element_name);
 	xml_serializer->AddAttribute(
-		CDXLTokens::GetDXLTokenStr(EdxltokenEngineConvertToArrow), m_to_arrow);
+		CDXLTokens::GetDXLTokenStr(EdxltokenEngineConvertToEngine),
+		m_to_engine);
 	if (m_ipc)
 	{
 		xml_serializer->AddAttribute(

@@ -59,7 +59,7 @@ typedef enum OrcaEngineOp
 	ORCA_ENGINE_OP_SORT,
 	ORCA_ENGINE_OP_MOTION,		/* motion shipping engine batches */
 	ORCA_ENGINE_OP_WINDOW,
-	ORCA_ENGINE_OP_SCAN			/* AOCO scans read straight into batches */
+	ORCA_ENGINE_OP_SCAN			/* table scans producing engine batches */
 } OrcaEngineOp;
 
 /*
@@ -67,17 +67,61 @@ typedef enum OrcaEngineOp
  * the target segment (for redistribution) and a serialized batch. The
  * sending island's custom_private gets a second String with its route.
  */
-#define ARROW_MOTION_SEGID_COL "arrow_segid"
-#define ARROW_MOTION_PAYLOAD_COL "arrow_payload"
+#define ORCA_ENGINE_MOTION_SEGID_COL "engine_segid"
+#define ORCA_ENGINE_MOTION_PAYLOAD_COL "engine_payload"
 
 typedef struct OrcaEngineConfig
 {
 	uint32		ops;			/* bitmask of 1 << OrcaEngineOp; 0 disables */
 	double		min_rows;		/* skip joins/aggs whose inputs are all smaller */
-	double		hash_build_limit;	/* per-segment bytes of a hash join build
-									 * the engine holds; larger ones run as
-									 * sort-merge joins. 0 = unlimited */
 } OrcaEngineConfig;
+
+typedef enum OrcaEngineJoinType
+{
+	ORCA_ENGINE_JOIN_NONE,		/* not a hash join */
+	ORCA_ENGINE_JOIN_INNER,
+	ORCA_ENGINE_JOIN_LEFT,
+	ORCA_ENGINE_JOIN_RIGHT,
+	ORCA_ENGINE_JOIN_FULL,
+	ORCA_ENGINE_JOIN_SEMI,
+	ORCA_ENGINE_JOIN_ANTI,
+	ORCA_ENGINE_JOIN_ANTI_NOT_IN	/* null-aware anti join */
+} OrcaEngineJoinType;
+
+/* Orca cost model parameters, for engines that cost their own algorithms */
+typedef struct OrcaEngineCostUnits
+{
+	double		sort_tup_width;
+	double		join_feeding_tup_column;
+	double		join_feeding_tup_width;
+	double		join_output_tup;
+} OrcaEngineCostUnits;
+
+typedef struct OrcaEngineCostInput
+{
+	OrcaEngineOp op;
+	OrcaEngineJoinType join_type;
+	/*
+	 * Orca's cost of the PG operator excluding its children, over all
+	 * rebinds (0 for conversions). For hash joins it assumes the build side
+	 * fits in memory; pg_cost_swapped is the same with the inputs' roles
+	 * exchanged.
+	 */
+	Cost		pg_cost;
+	Cost		pg_cost_swapped;
+	double		rebinds;
+	double		rows;			/* output, per segment */
+	double		width;
+	double		child_rows[2];	/* per segment; hash joins: probe, build */
+	double		child_width[2];
+	int			join_cols;		/* columns the join condition uses */
+	/* conversions: the columns crossing the boundary */
+	int			ncols;
+	const Oid  *col_types;
+	const bool *col_byval;
+	const double *col_widths;	/* average bytes */
+	const OrcaEngineCostUnits *units;
+} OrcaEngineCostInput;
 
 typedef struct OrcaExternalEngine
 {
@@ -85,13 +129,8 @@ typedef struct OrcaExternalEngine
 	/* Called once per optimization. */
 	void		(*configure) (OrcaEngineConfig *config);
 	bool		(*supports) (OrcaEngineAsk ask, Oid oid);
-	/*
-	 * Cost, in Orca units, of running op in the engine. pg_cost is Orca's
-	 * cost of the PG operator excluding its children (0 for conversions);
-	 * rows and width are its output per segment. Must not throw.
-	 */
-	double		(*cost) (OrcaEngineOp op, double pg_cost, double rows,
-						 double width);
+	/* Cost, in Orca units, of running in->op in the engine. */
+	Cost		(*cost) (const OrcaEngineCostInput *in);
 } OrcaExternalEngine;
 
 extern PGDLLIMPORT const OrcaExternalEngine *orca_external_engine;

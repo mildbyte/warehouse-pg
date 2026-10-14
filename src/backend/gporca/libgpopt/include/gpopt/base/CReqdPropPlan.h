@@ -13,9 +13,8 @@
 
 #include "gpos/base.h"
 
-#include "gpopt/base/CExecEngine.h"
-
 #include "gpopt/base/CColRef.h"
+#include "gpopt/base/CExecEngine.h"
 #include "gpopt/base/CReqdProp.h"
 
 namespace gpopt

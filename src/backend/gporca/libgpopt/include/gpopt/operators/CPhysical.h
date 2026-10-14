@@ -159,7 +159,7 @@ private:
 	// total number of optimization requests
 	ULONG m_ulTotalOptRequests;
 
-	// engine this operator runs in; Arrow variants are created by xforms
+	// engine this operator runs in; engine variants are created by xforms
 	EExecEngine m_exec_engine{EeePG};
 
 	// update number of requests of a given property

@@ -25,9 +25,9 @@ extern "C" {
 #include "executor/executor.h"
 #include "nodes/extensible.h"
 #include "nodes/nodes.h"
-#include "optimizer/orca.h"
 #include "nodes/plannodes.h"
 #include "nodes/primnodes.h"
+#include "optimizer/orca.h"
 #include "partitioning/partdesc.h"
 #include "storage/lmgr.h"
 #include "utils/guc.h"
@@ -41,14 +41,13 @@ extern "C" {
 #include <algorithm>
 #include <limits>  // std::numeric_limits
 #include <numeric>
+#include <string>
 #include <tuple>
 
 #include "gpos/base.h"
 #include "gpos/common/CBitSet.h"
 #include "gpos/common/CBitSetIter.h"
 #include "gpos/io/COstreamString.h"
-
-#include <string>
 
 #include "gpopt/base/CUtils.h"
 #include "gpopt/gpdbwrappers.h"
@@ -73,11 +72,11 @@ extern "C" {
 #include "naucrates/dxl/operators/CDXLPhysicalDynamicIndexOnlyScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalDynamicIndexScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalDynamicTableScan.h"
+#include "naucrates/dxl/operators/CDXLPhysicalEngineConvert.h"
 #include "naucrates/dxl/operators/CDXLPhysicalGatherMotion.h"
 #include "naucrates/dxl/operators/CDXLPhysicalHashJoin.h"
 #include "naucrates/dxl/operators/CDXLPhysicalIndexOnlyScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalLimit.h"
-#include "naucrates/dxl/operators/CDXLPhysicalEngineConvert.h"
 #include "naucrates/dxl/operators/CDXLPhysicalMaterialize.h"
 #include "naucrates/dxl/operators/CDXLPhysicalMergeJoin.h"
 #include "naucrates/dxl/operators/CDXLPhysicalNLJoin.h"
@@ -539,8 +538,8 @@ CTranslatorDXLToPlStmt::TranslateDXLOperatorToPlan(
 		}
 		case EdxlopPhysicalEngineConvert:
 		{
-			plan = TranslateDXLArrowIsland(dxlnode, output_context,
-										   ctxt_translation_prev_siblings);
+			plan = TranslateDXLEngineIsland(dxlnode, output_context,
+											ctxt_translation_prev_siblings);
 			break;
 		}
 	}
@@ -553,30 +552,29 @@ CTranslatorDXLToPlStmt::TranslateDXLOperatorToPlan(
 	return plan;
 }
 
-// A ToPG engine conversion is the root of an Arrow island. The island becomes
+// A ToPG engine conversion is the root of an engine island. The island becomes
 // a CustomScan owned by the extension: custom_private carries the island's
-// DXL, custom_plans the PG plans below its ToArrow leaves (in DXL pre-order),
+// DXL, custom_plans the PG plans below its ToEngine leaves (in DXL pre-order),
 // and the targetlist exposes the island output via custom_scan_tlist.
 Plan *
-CTranslatorDXLToPlStmt::TranslateDXLArrowIsland(
+CTranslatorDXLToPlStmt::TranslateDXLEngineIsland(
 	const CDXLNode *island_dxlnode, CDXLTranslateContext *output_context,
 	CDXLTranslationContextArray *ctxt_translation_prev_siblings)
 {
 	CDXLPhysicalEngineConvert *dxlop =
 		CDXLPhysicalEngineConvert::Cast(island_dxlnode->GetOperator());
-	if (dxlop->IsToArrow())
+	if (dxlop->IsToEngine())
 	{
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
-				   GPOS_WSZ_LIT("ToArrow outside of an Arrow island"));
+				   GPOS_WSZ_LIT("ToEngine outside of an engine island"));
 	}
 
-	const CustomScanMethods *methods =
-		gpdb::GetCustomScanMethods(
-			orca_external_engine->custom_scan_name, true);
+	const CustomScanMethods *methods = gpdb::GetCustomScanMethods(
+		orca_external_engine->custom_scan_name, true);
 	if (nullptr == methods)
 	{
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
-				   GPOS_WSZ_LIT("no Arrow island executor registered"));
+				   GPOS_WSZ_LIT("no engine island executor registered"));
 	}
 
 	CustomScan *cscan = MakeNode(CustomScan);
@@ -587,9 +585,9 @@ CTranslatorDXLToPlStmt::TranslateDXLArrowIsland(
 	TranslatePlanCosts(island_dxlnode, plan);
 
 	List *leaves = NIL;
-	CollectArrowIslandLeaves((*island_dxlnode)[EdxlengineconvertIndexChild],
-							 output_context, ctxt_translation_prev_siblings,
-							 &leaves);
+	CollectEngineIslandLeaves((*island_dxlnode)[EdxlengineconvertIndexChild],
+							  output_context, ctxt_translation_prev_siblings,
+							  &leaves);
 	cscan->custom_plans = leaves;
 
 	CDXLNode *proj_list_dxlnode =
@@ -598,14 +596,14 @@ CTranslatorDXLToPlStmt::TranslateDXLArrowIsland(
 	List *scan_tlist = NIL;
 	if (dxlop->IsIpc())
 	{
-		// The island feeds an Arrow motion; the motion above routes its
+		// The island feeds an engine motion; the motion above routes its
 		// rows and nothing references the island's columns directly.
 		const struct
 		{
 			const char *name;
 			Oid type;
-		} cols[] = {{ARROW_MOTION_SEGID_COL, INT4OID},
-					{ARROW_MOTION_PAYLOAD_COL, BYTEAOID}};
+		} cols[] = {{ORCA_ENGINE_MOTION_SEGID_COL, INT4OID},
+					{ORCA_ENGINE_MOTION_PAYLOAD_COL, BYTEAOID}};
 		for (ULONG ul = 0; ul < 2; ul++)
 		{
 			Var *var = gpdb::MakeVar(INDEX_VAR, (AttrNumber)(ul + 1),
@@ -623,8 +621,7 @@ CTranslatorDXLToPlStmt::TranslateDXLArrowIsland(
 			scan_tlist = gpdb::LAppend(scan_tlist, scan_te);
 		}
 	}
-	for (ULONG ul = 0; !dxlop->IsIpc() && ul < proj_list_dxlnode->Arity();
-		 ul++)
+	for (ULONG ul = 0; !dxlop->IsIpc() && ul < proj_list_dxlnode->Arity(); ul++)
 	{
 		CDXLNode *proj_elem_dxlnode = (*proj_list_dxlnode)[ul];
 		CDXLScalarProjElem *proj_elem =
@@ -665,41 +662,40 @@ CTranslatorDXLToPlStmt::TranslateDXLArrowIsland(
 
 	CWStringDynamic dxl_str(m_mp);
 	COstreamString oss(&dxl_str);
-	CDXLUtils::SerializePlan(m_mp, oss, island_dxlnode, 0 /*plan_id*/,
-							 0 /*plan_space_size*/,
-							 true /*serialize_header_footer*/,
-							 false /*indentation*/);
+	CDXLUtils::SerializePlan(
+		m_mp, oss, island_dxlnode, 0 /*plan_id*/, 0 /*plan_space_size*/,
+		true /*serialize_header_footer*/, false /*indentation*/);
 	CHAR *dxl = CTranslatorUtils::CreateMultiByteCharStringFromWCString(
 		dxl_str.GetBuffer());
-	cscan->custom_private =
-		gpdb::LAppend(NIL, gpdb::MakeStringValue(dxl));
+	cscan->custom_private = gpdb::LAppend(NIL, gpdb::MakeStringValue(dxl));
 
 	SetParamIds(plan);
 	return (Plan *) cscan;
 }
 
-// An Arrow motion moves the (segment, payload) rows of the island below it.
+// An engine motion moves the (segment, payload) rows of the island below it.
 // Redistribution becomes an explicit motion on the segment column, which the
 // island computes with cdbhash; it learns how from a route appended to its
 // custom_private: "gather", "broadcast" or "hash <numsegs> <attno>:<hashfunc>...",
 // attnos referring to the island's DXL project list.
 void
-CTranslatorDXLToPlStmt::TranslateDXLArrowMotion(const CDXLNode *motion_dxlnode,
-												const CDXLNode *island_dxlnode,
-												CustomScan *island,
-												Motion *motion)
+CTranslatorDXLToPlStmt::TranslateDXLEngineMotion(const CDXLNode *motion_dxlnode,
+												 const CDXLNode *island_dxlnode,
+												 CustomScan *island,
+												 Motion *motion)
 {
 	CDXLPhysicalMotion *motion_dxlop =
 		CDXLPhysicalMotion::Cast(motion_dxlnode->GetOperator());
 	if (CTranslatorUtils::IsDuplicateSensitiveMotion(motion_dxlop))
 	{
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
-				   GPOS_WSZ_LIT("duplicate-sensitive Arrow motion"));
+				   GPOS_WSZ_LIT("duplicate-sensitive engine motion"));
 	}
 
 	List *target_list = NIL;
 	const Oid types[] = {INT4OID, BYTEAOID};
-	const char *names[] = {ARROW_MOTION_SEGID_COL, ARROW_MOTION_PAYLOAD_COL};
+	const char *names[] = {ORCA_ENGINE_MOTION_SEGID_COL,
+						   ORCA_ENGINE_MOTION_PAYLOAD_COL};
 	for (ULONG ul = 0; ul < 2; ul++)
 	{
 		TargetEntry *te = MakeNode(TargetEntry);
@@ -766,9 +762,8 @@ CTranslatorDXLToPlStmt::TranslateDXLArrowMotion(const CDXLNode *motion_dxlnode,
 				}
 				if (0 == attno)
 				{
-					GPOS_RAISE(gpdxl::ExmaDXL,
-							   gpdxl::ExmiDXL2PlStmtConversion,
-							   GPOS_WSZ_LIT("Arrow motion key not shipped"));
+					GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
+							   GPOS_WSZ_LIT("engine motion key not shipped"));
 				}
 				Oid typeoid = CMDIdGPDB::CastMdid(colref->MdidType())->Oid();
 				Oid hashfunc =
@@ -786,23 +781,24 @@ CTranslatorDXLToPlStmt::TranslateDXLArrowMotion(const CDXLNode *motion_dxlnode,
 		}
 		default:
 			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
-					   GPOS_WSZ_LIT("unsupported Arrow motion"));
+					   GPOS_WSZ_LIT("unsupported engine motion"));
 	}
-	island->custom_private =
-		gpdb::LAppend(island->custom_private, gpdb::MakeStringValue(PStrDup(route.c_str())));
+	island->custom_private = gpdb::LAppend(
+		island->custom_private, gpdb::MakeStringValue(PStrDup(route.c_str())));
 }
 
 List *
-CTranslatorDXLToPlStmt::ArrowIpcTargetList(Index varno)
+CTranslatorDXLToPlStmt::EngineIpcTargetList(Index varno)
 {
 	const Oid types[] = {INT4OID, BYTEAOID};
-	const char *names[] = {ARROW_MOTION_SEGID_COL, ARROW_MOTION_PAYLOAD_COL};
+	const char *names[] = {ORCA_ENGINE_MOTION_SEGID_COL,
+						   ORCA_ENGINE_MOTION_PAYLOAD_COL};
 	List *target_list = NIL;
 	for (ULONG ul = 0; ul < 2; ul++)
 	{
 		TargetEntry *te = MakeNode(TargetEntry);
-		te->expr =
-			(Expr *) gpdb::MakeVar(varno, (AttrNumber)(ul + 1), types[ul], -1, 0);
+		te->expr = (Expr *) gpdb::MakeVar(varno, (AttrNumber)(ul + 1),
+										  types[ul], -1, 0);
 		te->resno = (AttrNumber)(ul + 1);
 		te->resname = PStrDup(names[ul]);
 		target_list = gpdb::LAppend(target_list, te);
@@ -811,14 +807,14 @@ CTranslatorDXLToPlStmt::ArrowIpcTargetList(Index varno)
 }
 
 void
-CTranslatorDXLToPlStmt::CollectArrowIslandLeaves(
+CTranslatorDXLToPlStmt::CollectEngineIslandLeaves(
 	const CDXLNode *dxlnode, CDXLTranslateContext *output_context,
 	CDXLTranslationContextArray *ctxt_translation_prev_siblings, List **leaves)
 {
 	CDXLOperator *dxlop = dxlnode->GetOperator();
 	if (EdxlopPhysicalEngineConvert == dxlop->GetDXLOperator())
 	{
-		GPOS_ASSERT(CDXLPhysicalEngineConvert::Cast(dxlop)->IsToArrow());
+		GPOS_ASSERT(CDXLPhysicalEngineConvert::Cast(dxlop)->IsToEngine());
 		CDXLTranslateContext child_context(
 			m_mp, false, output_context->GetColIdToParamIdMap());
 		const CDXLNode *child = (*dxlnode)[EdxlengineconvertIndexChild];
@@ -840,8 +836,8 @@ CTranslatorDXLToPlStmt::CollectArrowIslandLeaves(
 		CDXLNode *child = (*dxlnode)[ul];
 		if (EdxloptypePhysical == child->GetOperator()->GetDXLOperatorType())
 		{
-			CollectArrowIslandLeaves(child, output_context,
-									 ctxt_translation_prev_siblings, leaves);
+			CollectEngineIslandLeaves(child, output_context,
+									  ctxt_translation_prev_siblings, leaves);
 		}
 	}
 }
@@ -2733,8 +2729,8 @@ CTranslatorDXLToPlStmt::TranslateDXLMotion(
 			child_dxlnode->GetOperator()->GetDXLOperator() &&
 		CDXLPhysicalEngineConvert::Cast(child_dxlnode->GetOperator())->IsIpc())
 	{
-		TranslateDXLArrowMotion(motion_dxlnode, child_dxlnode,
-								(CustomScan *) child_plan, motion);
+		TranslateDXLEngineMotion(motion_dxlnode, child_dxlnode,
+								 (CustomScan *) child_plan, motion);
 		m_dxl_to_plstmt_context->SetCurrentSlice(recvslice);
 		plan->lefttree = child_plan;
 		SetParamIds(plan);
@@ -4396,9 +4392,9 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEProducerToSharedScan(
 			child_dxlnode->GetOperator()->GetDXLOperator() &&
 		CDXLPhysicalEngineConvert::Cast(child_dxlnode->GetOperator())->IsIpc())
 	{
-		// an Arrow producer shares the (segment, payload) rows of its island
+		// an engine producer shares the (segment, payload) rows of its island
 		GPOS_ASSERT(IsA(child_plan, CustomScan));
-		plan->targetlist = ArrowIpcTargetList(OUTER_VAR);
+		plan->targetlist = EngineIpcTargetList(OUTER_VAR);
 		CustomScan *island = (CustomScan *) child_plan;
 		island->custom_private = gpdb::LAppend(
 			island->custom_private, gpdb::MakeStringValue(PStrDup("gather")));
@@ -4455,11 +4451,10 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEConsumerToSharedScan(
 #endif
 
 	// generate the target list of the CTE Consumer; the consumer of an
-	// Arrow producer reads its (segment, payload) rows
-	plan->targetlist = ipc ? ArrowIpcTargetList(OUTER_VAR) : NIL;
+	// Engine producer reads its (segment, payload) rows
+	plan->targetlist = ipc ? EngineIpcTargetList(OUTER_VAR) : NIL;
 	CDXLNode *project_list_dxlnode = (*cte_consumer_dxlnode)[0];
-	const ULONG num_of_proj_list_elem =
-		ipc ? 0 : project_list_dxlnode->Arity();
+	const ULONG num_of_proj_list_elem = ipc ? 0 : project_list_dxlnode->Arity();
 	GPOS_ASSERT(num_of_proj_list_elem == output_colids_array->Size());
 	for (ULONG ul = 0; ul < num_of_proj_list_elem; ul++)
 	{
@@ -4530,8 +4525,8 @@ CTranslatorDXLToPlStmt::TranslateDXLSequence(
 	{
 		CDXLNode *child_dxlnode = (*sequence_dxlnode)[ul];
 
-		child_plan = TranslateDXLOperatorToPlan(
-			child_dxlnode, &child_context, ctxt_translation_prev_siblings);
+		child_plan = TranslateDXLOperatorToPlan(child_dxlnode, &child_context,
+												ctxt_translation_prev_siblings);
 
 		psequence->subplans = gpdb::LAppend(psequence->subplans, child_plan);
 	}
@@ -4547,9 +4542,9 @@ CTranslatorDXLToPlStmt::TranslateDXLSequence(
 			last_dxlnode->GetOperator()->GetDXLOperator() &&
 		CDXLPhysicalEngineConvert::Cast(last_dxlnode->GetOperator())->IsIpc())
 	{
-		// an Arrow sequence passes its last island's (segment, payload) rows
+		// an engine sequence passes its last island's (segment, payload) rows
 		GPOS_ASSERT(IsA(child_plan, CustomScan));
-		plan->targetlist = ArrowIpcTargetList(OUTER_VAR);
+		plan->targetlist = EngineIpcTargetList(OUTER_VAR);
 		CustomScan *island = (CustomScan *) child_plan;
 		island->custom_private = gpdb::LAppend(
 			island->custom_private, gpdb::MakeStringValue(PStrDup("gather")));

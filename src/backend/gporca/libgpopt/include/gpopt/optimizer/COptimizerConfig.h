@@ -17,6 +17,7 @@
 #include "gpos/common/CRefCount.h"
 
 #include "gpopt/base/CWindowOids.h"
+#include "gpopt/base/IExternalEngine.h"
 #include "gpopt/engine/CCTEConfig.h"
 #include "gpopt/engine/CEnumeratorConfig.h"
 #include "gpopt/engine/CHint.h"
@@ -69,11 +70,15 @@ private:
 	// default window oids
 	CWindowOids *m_window_oids;
 
+	// engine besides the PG executor, or null
+	IExternalEngine *m_external_engine;
+
 public:
 	// ctor
 	COptimizerConfig(CEnumeratorConfig *pec, CStatisticsConfig *stats_config,
 					 CCTEConfig *pcteconf, ICostModel *pcm, CHint *phint,
-					 CPlanHint *pplanhint, CWindowOids *pdefoidsGPDB);
+					 CPlanHint *pplanhint, CWindowOids *pdefoidsGPDB,
+					 IExternalEngine *external_engine = nullptr);
 
 	// dtor
 	~COptimizerConfig() override;
@@ -125,6 +130,12 @@ public:
 	GetPlanHint() const
 	{
 		return m_plan_hint;
+	}
+
+	IExternalEngine *
+	GetExternalEngine() const
+	{
+		return m_external_engine;
 	}
 
 	// generate default optimizer configurations

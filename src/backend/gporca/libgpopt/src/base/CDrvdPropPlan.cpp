@@ -138,7 +138,7 @@ CDrvdPropPlan::CopyCTEProducerPlanProps(CMemoryPool *mp, CDrvdPropCtxt *pdpctxt,
 		pdpplan->Prs()->AddRef();
 		m_prs = pdpplan->Prs();
 		// consumers read what the producer's input shares: rows, or the IPC
-		// batches of an Arrow producer
+		// batches of an engine producer
 		m_ee = pdpplan->Ee();
 
 		// no need to copy the part index map. return an empty one. This is to

@@ -40,10 +40,10 @@
 #include "gpopt/operators/CPattern.h"
 #include "gpopt/operators/CPatternLeaf.h"
 #include "gpopt/operators/CPhysicalAgg.h"
+#include "gpopt/operators/CPhysicalEngineConvert.h"
 #include "gpopt/operators/CPhysicalMotionGather.h"
 #include "gpopt/operators/CPhysicalPartitionSelector.h"
 #include "gpopt/operators/CPhysicalSort.h"
-#include "gpopt/operators/CPhysicalEngineConvert.h"
 #include "gpopt/optimizer/COptimizerConfig.h"
 #include "gpopt/search/CBinding.h"
 #include "gpopt/search/CGroup.h"
@@ -567,11 +567,12 @@ CEngine::FOptimizeChild(
 	{
 		CReqdPropPlan *prpp = pocChild->Prpp();
 		if (!FEeNative(prpp->Ee()) &&
-			CArrowEngineUtils::FColsSupported(prpp->PcrsRequired()))
+			CExternalEngineUtils::FColsSupported(prpp->PcrsRequired()))
 		{
 			CBinding binding;
-			CExpression *pexpr = binding.PexprExtract(
-				m_mp, pgexprChild, m_pexprEnforcerPattern, nullptr /* pexprLast */);
+			CExpression *pexpr =
+				binding.PexprExtract(m_mp, pgexprChild, m_pexprEnforcerPattern,
+									 nullptr /* pexprLast */);
 			CExpressionArray *pdrgpexpr = GPOS_NEW(m_mp) CExpressionArray(m_mp);
 			pdrgpexpr->Append(GPOS_NEW(m_mp) CExpression(
 				m_mp,
@@ -2190,8 +2191,8 @@ CEngine::FCheckEnfdProps(CMemoryPool *mp, CGroupExpression *pgexpr,
 				<< pgexpr->Id() << " " << popPhysical->SzId() << "/"
 				<< SzExecEngine(popPhysical->ExecEngine()) << " epet o"
 				<< epetOrder << " d" << epetDistribution << " r"
-				<< epetRewindability << " p" << epetPartitionPropagation
-				<< " e" << epetEngine << " req: " << *prpp;
+				<< epetRewindability << " p" << epetPartitionPropagation << " e"
+				<< epetEngine << " req: " << *prpp;
 	}
 	if (FProhibited(epetOrder, epetDistribution, epetRewindability,
 					epetPartitionPropagation) ||
@@ -2219,9 +2220,9 @@ CEngine::FCheckEnfdProps(CMemoryPool *mp, CGroupExpression *pgexpr,
 								 epetRewindability, exprhdl);
 	prpp->Pepp()->AppendEnforcers(mp, prpp, pdrgpexprEnforcers, pexpr,
 								  epetPartitionPropagation, exprhdl);
-	// under an Arrow request, each motion also gets a twin shipping Arrow
+	// under an engine request, each motion also gets a twin shipping engine
 	// batches, which spares the conversions on both sides of it
-	if (EeeArrow == EeBase(prpp->Ee()))
+	if (EeeExternal == EeBase(prpp->Ee()))
 	{
 		const ULONG ulEnforcers = pdrgpexprEnforcers->Size();
 		for (ULONG ul = 0; ul < ulEnforcers; ul++)
@@ -2231,11 +2232,11 @@ CEngine::FCheckEnfdProps(CMemoryPool *mp, CGroupExpression *pgexpr,
 			{
 				continue;
 			}
-			CExpression *pexprArrow =
-				CArrowEngineUtils::PexprArrowMotion(mp, exprhdl, pexprEnf);
-			if (nullptr != pexprArrow)
+			CExpression *pexprEngine =
+				CExternalEngineUtils::PexprEngineMotion(mp, exprhdl, pexprEnf);
+			if (nullptr != pexprEngine)
 			{
-				pdrgpexprEnforcers->Append(pexprArrow);
+				pdrgpexprEnforcers->Append(pexprEngine);
 			}
 		}
 	}
@@ -2243,7 +2244,8 @@ CEngine::FCheckEnfdProps(CMemoryPool *mp, CGroupExpression *pgexpr,
 	{
 		pexpr->AddRef();
 		pdrgpexprEnforcers->Append(GPOS_NEW(mp) CExpression(
-			mp, GPOS_NEW(mp) CPhysicalEngineConvert(mp, EeBase(prpp->Ee())), pexpr));
+			mp, GPOS_NEW(mp) CPhysicalEngineConvert(mp, EeBase(prpp->Ee())),
+			pexpr));
 	}
 
 	if (0 < pdrgpexprEnforcers->Size())
@@ -2363,8 +2365,8 @@ CEngine::FCheckReqdProps(CExpressionHandle &exprhdl, CReqdPropPlan *prpp,
 	{
 		CAutoTrace at(m_mp);
 		at.Os() << "REQD grp " << exprhdl.Pgexpr()->Pgroup()->Id() << " gexpr "
-				<< exprhdl.Pgexpr()->Id() << " "
-				<< exprhdl.Pop()->SzId() << " req: " << *prpp;
+				<< exprhdl.Pgexpr()->Id() << " " << exprhdl.Pop()->SzId()
+				<< " req: " << *prpp;
 	}
 	// check if operator provides required columns
 	if (!prpp->FProvidesReqdCols(m_mp, exprhdl, ulOptReq))
@@ -2413,17 +2415,16 @@ CEngine::FCheckReqdProps(CExpressionHandle &exprhdl, CReqdPropPlan *prpp,
 	}
 
 	// every column crossing the engine boundary has to be convertible,
-	// including the ones an Arrow scan reads
+	// including the ones an engine scan reads
 	if ((COperator::EopPhysicalEngineConvert == op_id ||
 		 (COperator::EopPhysicalTableScan == op_id &&
-		  EeeArrow == popPhysical->ExecEngine())) &&
-		!CArrowEngineUtils::FColsSupported(prpp->PcrsRequired()))
+		  EeeExternal == popPhysical->ExecEngine())) &&
+		!CExternalEngineUtils::FColsSupported(prpp->PcrsRequired()))
 	{
 		return false;
 	}
 
-	if (FEeNative(prpp->Ee()) &&
-		COperator::EopPhysicalEngineConvert == op_id)
+	if (FEeNative(prpp->Ee()) && COperator::EopPhysicalEngineConvert == op_id)
 	{
 		return false;
 	}

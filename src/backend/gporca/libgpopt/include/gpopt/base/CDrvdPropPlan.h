@@ -12,12 +12,11 @@
 #define GPOPT_CDrvdPropPlan_H
 
 #include "gpos/base.h"
-
-#include "gpopt/base/CExecEngine.h"
 #include "gpos/common/CRefCount.h"
 
 #include "gpopt/base/CColRef.h"
 #include "gpopt/base/CDrvdProp.h"
+#include "gpopt/base/CExecEngine.h"
 
 namespace gpopt
 {

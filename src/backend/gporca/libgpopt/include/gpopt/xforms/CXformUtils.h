@@ -613,28 +613,29 @@ CXformUtils::TransformImplementBinaryOp(CXformContext *pxfctxt,
 				COperator::EopPhysicalLeftAntiSemiNLJoin == op_id ||
 				COperator::EopPhysicalLeftAntiSemiNLJoinNotIn == op_id);
 
-	// Arrow twin: DataFusion collects the inner side once, so neither
+	// Engine twin: the engine collects the inner side once, so neither
 	// correlated inner sides nor NOT IN semantics are expressible. A join
-	// with a hash-joinable conjunct also gets an Arrow hash join, which
-	// always beats DataFusion's NLJ; the NLJ twin would only grow the
+	// with a hash-joinable conjunct also gets an engine hash join, which
+	// always beats the engine's NLJ; the NLJ twin would only grow the
 	// search (Q02 planning time 4x).
 	COperator::EOperatorId eopidNL = pexprBinary->Pop()->Eopid();
 	CExpression *pexprScalarTree =
-		CArrowEngineUtils::PexprScalarTree(pexprScalar);
+		CExternalEngineUtils::PexprScalarTree(pexprScalar);
 	if (COperator::EopPhysicalLeftAntiSemiNLJoinNotIn != eopidNL &&
 		nullptr != pexprScalarTree && !CUtils::HasOuterRefs(pexprRight) &&
-		CArrowEngineUtils::FEnabled(EaopHashJoin) &&
-		!CArrowEngineUtils::FHashJoinable(mp, pexpr, pexprScalarTree) &&
-		CArrowEngineUtils::FLargeEnough(pexpr) &&
-		CArrowEngineUtils::FColsSupported(pexprScalar->DeriveUsedColumns()) &&
-		CArrowEngineUtils::FScalarSupported(pexprScalarTree))
+		CExternalEngineUtils::FEnabled(EeopHashJoin) &&
+		!CExternalEngineUtils::FHashJoinable(mp, pexpr, pexprScalarTree) &&
+		CExternalEngineUtils::FLargeEnough(pexpr) &&
+		CExternalEngineUtils::FColsSupported(
+			pexprScalar->DeriveUsedColumns()) &&
+		CExternalEngineUtils::FScalarSupported(pexprScalarTree))
 	{
 		pexprLeft->AddRef();
 		pexprRight->AddRef();
 		pexprScalar->AddRef();
-		T *popArrow = GPOS_NEW(mp) T(mp);
-		popArrow->SetExecEngine(EeeArrow);
-		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popArrow, pexprLeft,
+		T *popEngine = GPOS_NEW(mp) T(mp);
+		popEngine->SetExecEngine(EeeExternal);
+		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popEngine, pexprLeft,
 											 pexprRight, pexprScalar));
 	}
 
@@ -673,11 +674,11 @@ CXformUtils::AddHashOrMergeJoinAlternative(
 		GPOS_NEW(mp) T(mp, pdrgpexprOuter, pdrgpexprInner, opfamilies,
 					   is_hash_join_null_aware, popLogicalJoin->OriginXform());
 
-	// Arrow twin for every hash join type; DataFusion's null-aware anti
+	// Engine twin for every hash join type; the engine's null-aware anti
 	// join takes a single key. The key arrays are shared, so take references
 	// before the PG alternative may be released below.
 	COperator::EOperatorId eopidJoin = op->Eopid();
-	BOOL fArrow =
+	BOOL fEngine =
 		(COperator::EopPhysicalInnerHashJoin == eopidJoin ||
 		 COperator::EopPhysicalLeftOuterHashJoin == eopidJoin ||
 		 COperator::EopPhysicalRightOuterHashJoin == eopidJoin ||
@@ -686,11 +687,12 @@ CXformUtils::AddHashOrMergeJoinAlternative(
 		 COperator::EopPhysicalFullHashJoin == eopidJoin ||
 		 (COperator::EopPhysicalLeftAntiSemiHashJoinNotIn == eopidJoin &&
 		  1 == pdrgpexprOuter->Size())) &&
-		CArrowEngineUtils::FEnabled(EaopHashJoin) &&
-		CArrowEngineUtils::FLargeEnough(pexprJoin) &&
-		CArrowEngineUtils::FColsSupported((*pexprJoin)[2]->DeriveUsedColumns()) &&
-		CArrowEngineUtils::FScalarSupported((*pexprJoin)[2]);
-	if (fArrow)
+		CExternalEngineUtils::FEnabled(EeopHashJoin) &&
+		CExternalEngineUtils::FLargeEnough(pexprJoin) &&
+		CExternalEngineUtils::FColsSupported(
+			(*pexprJoin)[2]->DeriveUsedColumns()) &&
+		CExternalEngineUtils::FScalarSupported((*pexprJoin)[2]);
+	if (fEngine)
 	{
 		pdrgpexprOuter->AddRef();
 		pdrgpexprInner->AddRef();
@@ -713,17 +715,17 @@ CXformUtils::AddHashOrMergeJoinAlternative(
 		pxfres->Add(pexprResult);
 	}
 
-	if (fArrow)
+	if (fEngine)
 	{
 		for (ULONG ul = 0; ul < 3; ul++)
 		{
 			(*pexprJoin)[ul]->AddRef();
 		}
-		T *popArrow =
-			GPOS_NEW(mp) T(mp, pdrgpexprOuter, pdrgpexprInner, opfamilies,
-						   is_hash_join_null_aware, popLogicalJoin->OriginXform());
-		popArrow->SetExecEngine(EeeArrow);
-		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popArrow, (*pexprJoin)[0],
+		T *popEngine = GPOS_NEW(mp)
+			T(mp, pdrgpexprOuter, pdrgpexprInner, opfamilies,
+			  is_hash_join_null_aware, popLogicalJoin->OriginXform());
+		popEngine->SetExecEngine(EeeExternal);
+		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popEngine, (*pexprJoin)[0],
 											 (*pexprJoin)[1], (*pexprJoin)[2]));
 	}
 }

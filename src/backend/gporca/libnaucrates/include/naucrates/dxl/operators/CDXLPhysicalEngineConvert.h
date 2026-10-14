@@ -2,7 +2,7 @@
 //	CDXLPhysicalEngineConvert.h
 //
 //	Engine boundary: children are [project list, child plan]. A ToPG node is
-//	the root of an Arrow island; ToArrow nodes are its leaves.
+//	the root of an engine island; ToEngine nodes are its leaves.
 //---------------------------------------------------------------------------
 #ifndef GPDXL_CDXLPhysicalEngineConvert_H
 #define GPDXL_CDXLPhysicalEngineConvert_H
@@ -23,17 +23,17 @@ enum Edxlengineconvert
 class CDXLPhysicalEngineConvert : public CDXLPhysical
 {
 private:
-	BOOL m_to_arrow;
+	BOOL m_to_engine;
 
-	// the conversion sits at an Arrow motion: the ToPG side emits Arrow
-	// batches serialized into (segment, payload) rows, the ToArrow side
+	// the conversion sits at an engine motion: the ToPG side emits engine
+	// batches serialized into (segment, payload) rows, the ToEngine side
 	// decodes them
 	BOOL m_ipc;
 
 public:
 	CDXLPhysicalEngineConvert(const CDXLPhysicalEngineConvert &) = delete;
 
-	CDXLPhysicalEngineConvert(CMemoryPool *mp, BOOL to_arrow,
+	CDXLPhysicalEngineConvert(CMemoryPool *mp, BOOL to_engine,
 							  BOOL ipc = false);
 
 	Edxlopid GetDXLOperator() const override;
@@ -41,9 +41,9 @@ public:
 	const CWStringConst *GetOpNameStr() const override;
 
 	BOOL
-	IsToArrow() const
+	IsToEngine() const
 	{
-		return m_to_arrow;
+		return m_to_engine;
 	}
 
 	BOOL

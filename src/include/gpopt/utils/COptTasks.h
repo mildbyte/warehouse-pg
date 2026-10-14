@@ -43,6 +43,7 @@ class CQueryContext;
 class COptimizerConfig;
 class ICostModel;
 class CPlanHint;
+class IExternalEngine;
 }  // namespace gpopt
 
 struct PlannedStmt;
@@ -120,9 +121,9 @@ private:
 	static void LogExceptionMessageAndDelete(CHAR *err_buf);
 
 	// create optimizer configuration object
-	static COptimizerConfig *CreateOptimizerConfig(CMemoryPool *mp,
-												   ICostModel *cost_model,
-												   CPlanHint *plan_hints);
+	static COptimizerConfig *CreateOptimizerConfig(
+		CMemoryPool *mp, ICostModel *cost_model, CPlanHint *plan_hints,
+		IExternalEngine *external_engine);
 
 	// optimize a query to a physical DXL
 	static void *OptimizeTask(void *ptr);

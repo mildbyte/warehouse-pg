@@ -50,8 +50,8 @@ CDXLTokens::Init(CMemoryPool *mp)
 
 	SWszMapElem rgStrMap[] = {
 		{EdxltokenPhysicalEngineConvert, GPOS_WSZ_LIT("EngineConvert")},
-		{EdxltokenEngineConvertToArrow, GPOS_WSZ_LIT("ToArrow")},
-		{EdxltokenEngineConvertIpc, GPOS_WSZ_LIT("ArrowIpc")},
+		{EdxltokenEngineConvertToEngine, GPOS_WSZ_LIT("ToEngine")},
+		{EdxltokenEngineConvertIpc, GPOS_WSZ_LIT("Ipc")},
 		{EdxltokenDXLMessage, GPOS_WSZ_LIT("DXLMessage")},
 		{EdxltokenComment, GPOS_WSZ_LIT("Comment")},
 		{EdxltokenPlan, GPOS_WSZ_LIT("Plan")},

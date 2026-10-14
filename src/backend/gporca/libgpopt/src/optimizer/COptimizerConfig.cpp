@@ -33,14 +33,16 @@ COptimizerConfig::COptimizerConfig(CEnumeratorConfig *pec,
 								   CStatisticsConfig *stats_config,
 								   CCTEConfig *pcteconf, ICostModel *cost_model,
 								   CHint *phint, CPlanHint *pplanhint,
-								   CWindowOids *pwindowoids)
+								   CWindowOids *pwindowoids,
+								   IExternalEngine *external_engine)
 	: m_enumerator_cfg(pec),
 	  m_stats_conf(stats_config),
 	  m_cte_conf(pcteconf),
 	  m_cost_model(cost_model),
 	  m_hint(phint),
 	  m_plan_hint(pplanhint),
-	  m_window_oids(pwindowoids)
+	  m_window_oids(pwindowoids),
+	  m_external_engine(external_engine)
 {
 	GPOS_ASSERT(nullptr != pec);
 	GPOS_ASSERT(nullptr != stats_config);
@@ -67,6 +69,7 @@ COptimizerConfig::~COptimizerConfig()
 	CRefCount::SafeRelease(m_plan_hint);
 	m_hint->Release();
 	m_window_oids->Release();
+	CRefCount::SafeRelease(m_external_engine);
 }
 
 //---------------------------------------------------------------------------

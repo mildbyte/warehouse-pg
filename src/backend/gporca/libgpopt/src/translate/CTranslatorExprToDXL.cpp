@@ -42,6 +42,7 @@
 #include "gpopt/operators/CPhysicalDynamicIndexOnlyScan.h"
 #include "gpopt/operators/CPhysicalDynamicIndexScan.h"
 #include "gpopt/operators/CPhysicalDynamicTableScan.h"
+#include "gpopt/operators/CPhysicalEngineConvert.h"
 #include "gpopt/operators/CPhysicalHashAgg.h"
 #include "gpopt/operators/CPhysicalHashAggDeduplicate.h"
 #include "gpopt/operators/CPhysicalHashJoin.h"
@@ -60,7 +61,6 @@
 #include "gpopt/operators/CPhysicalSequenceProject.h"
 #include "gpopt/operators/CPhysicalSort.h"
 #include "gpopt/operators/CPhysicalSplit.h"
-#include "gpopt/operators/CPhysicalEngineConvert.h"
 #include "gpopt/operators/CPhysicalSpool.h"
 #include "gpopt/operators/CPhysicalStreamAgg.h"
 #include "gpopt/operators/CPhysicalStreamAggDeduplicate.h"
@@ -110,13 +110,13 @@
 #include "naucrates/dxl/operators/CDXLPhysicalDynamicIndexOnlyScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalDynamicIndexScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalDynamicTableScan.h"
+#include "naucrates/dxl/operators/CDXLPhysicalEngineConvert.h"
 #include "naucrates/dxl/operators/CDXLPhysicalForeignScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalGatherMotion.h"
 #include "naucrates/dxl/operators/CDXLPhysicalHashJoin.h"
 #include "naucrates/dxl/operators/CDXLPhysicalIndexOnlyScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalIndexScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalLimit.h"
-#include "naucrates/dxl/operators/CDXLPhysicalEngineConvert.h"
 #include "naucrates/dxl/operators/CDXLPhysicalMaterialize.h"
 #include "naucrates/dxl/operators/CDXLPhysicalMergeJoin.h"
 #include "naucrates/dxl/operators/CDXLPhysicalNLJoin.h"
@@ -758,12 +758,12 @@ CTranslatorExprToDXL::PdxlnTblScan(CExpression *pexprTblScan,
 	pds->AddRef();
 	pdrgpdsBaseTables->Append(pds);
 
-	// The engine reads an Arrow scan itself; in the plan it is the PG scan,
+	// The engine reads its scans itself; in the plan it is the PG scan,
 	// filter included, as the leaf of a conversion
-	if (EeeArrow == popTblScan->ExecEngine())
+	if (EeeExternal == popTblScan->ExecEngine())
 	{
-		CDXLNode *dxlnode = GPOS_NEW(m_mp)
-			CDXLNode(m_mp, GPOS_NEW(m_mp) CDXLPhysicalEngineConvert(m_mp, true));
+		CDXLNode *dxlnode = GPOS_NEW(m_mp) CDXLNode(
+			m_mp, GPOS_NEW(m_mp) CDXLPhysicalEngineConvert(m_mp, true));
 		dxlnode->SetProperties(
 			CTranslatorExprToDXLUtils::PdxlpropCopy(m_mp, pdxlnTblScan));
 		dxlnode->AddChild(
@@ -2413,19 +2413,19 @@ CTranslatorExprToDXL::PdxlnCTEProducer(
 	CColRefSet *pcrsOutput = GPOS_NEW(m_mp) CColRefSet(m_mp);
 	pcrsOutput->Include(pdrgpcrRequired);
 
-	const BOOL fArrow = EeeArrow == popCTEProducer->ExecEngine();
+	const BOOL fEngine = EeeExternal == popCTEProducer->ExecEngine();
 
-	// translate relational child expression; an Arrow child must not get a
+	// translate relational child expression; an engine child must not get a
 	// remapping Result on top
 	CDXLNode *child_dxlnode = CreateDXLNode(
 		pexprRelational, pdrgpcrRequired, pdrgpdsBaseTables,
-		pulNonGatherMotions, pfDML, !fArrow /*fRemap*/, false /*fRoot */);
+		pulNonGatherMotions, pfDML, !fEngine /*fRemap*/, false /*fRoot */);
 
 	CDXLNode *pdxlnPrL = PdxlnProjList(pcrsOutput, pdrgpcrRequired);
 
-	// An Arrow producer shares the IPC batches of the island below it, with
+	// An engine producer shares the IPC batches of the island below it, with
 	// columns in the producer's order, which consumers decode by position.
-	if (fArrow)
+	if (fEngine)
 	{
 		CDXLNode *pdxlnSend = GPOS_NEW(m_mp) CDXLNode(
 			m_mp, GPOS_NEW(m_mp) CDXLPhysicalEngineConvert(m_mp, false, true));
@@ -2488,9 +2488,10 @@ CTranslatorExprToDXL::PdxlnCTEConsumer(
 
 	pdxlnCTEConsumer->SetProperties(dxl_properties);
 
-	// the consumer of an Arrow producer reads IPC batches, which the island
+	// the consumer of an engine producer reads IPC batches, which the island
 	// above decodes
-	if (EeeArrow == CDrvdPropPlan::Pdpplan(pexprCTEConsumer->PdpDerive())->Ee())
+	if (EeeExternal ==
+		CDrvdPropPlan::Pdpplan(pexprCTEConsumer->PdpDerive())->Ee())
 	{
 		CDXLNode *pdxlnRecv = GPOS_NEW(m_mp) CDXLNode(
 			m_mp, GPOS_NEW(m_mp) CDXLPhysicalEngineConvert(m_mp, true, true));
@@ -2697,7 +2698,7 @@ CTranslatorExprToDXL::PdxlnRemapOutputColumns(CExpression *pexpr,
 	// rather than add a Result on top of the island
 	if (EdxlopPhysicalEngineConvert ==
 			dxlnode->GetOperator()->GetDXLOperator() &&
-		!CDXLPhysicalEngineConvert::Cast(dxlnode->GetOperator())->IsToArrow())
+		!CDXLPhysicalEngineConvert::Cast(dxlnode->GetOperator())->IsToEngine())
 	{
 		dxlnode->ReplaceChild(0, pdxlnPrLNew);
 		return dxlnode;
@@ -4812,26 +4813,27 @@ CTranslatorExprToDXL::PdxlnMotion(CExpression *pexprMotion,
 
 	// extract components
 	CExpression *pexprChild = (*pexprMotion)[0];
-	const BOOL fArrow =
-		EeeArrow == CPhysical::PopConvert(pexprMotion->Pop())->ExecEngine();
+	const BOOL fEngine =
+		EeeExternal == CPhysical::PopConvert(pexprMotion->Pop())->ExecEngine();
 
-	// translate relational child expression; an Arrow child must not get a
+	// translate relational child expression; an engine child must not get a
 	// remapping Result on top
 	CDXLNode *child_dxlnode = CreateDXLNode(
 		pexprChild, colref_array, pdrgpdsBaseTables, pulNonGatherMotions, pfDML,
-		!fArrow /*fRemap*/, false /*fRoot*/);
+		!fEngine /*fRemap*/, false /*fRoot*/);
 
-	// An Arrow motion is a PG motion between two IPC conversions: the island
+	// An engine motion is a PG motion between two IPC conversions: the island
 	// below emits its batches as (segment, payload) rows routed by the
 	// motion, and the island above decodes them.
-	if (fArrow)
+	if (fEngine)
 	{
 		GPOS_ASSERT(!CUtils::FDuplicateHazardMotion(pexprMotion));
 		CDXLNode *pdxlnSend = GPOS_NEW(m_mp) CDXLNode(
 			m_mp, GPOS_NEW(m_mp) CDXLPhysicalEngineConvert(m_mp, false, true));
 		pdxlnSend->SetProperties(GetProperties(pexprChild));
-		pdxlnSend->AddChild(CTranslatorExprToDXLUtils::PdxlnProjListFromChildProjList(
-			m_mp, m_pcf, m_phmcrdxln, (*child_dxlnode)[0]));
+		pdxlnSend->AddChild(
+			CTranslatorExprToDXLUtils::PdxlnProjListFromChildProjList(
+				m_mp, m_pcf, m_phmcrdxln, (*child_dxlnode)[0]));
 		pdxlnSend->AddChild(child_dxlnode);
 		child_dxlnode = pdxlnSend;
 	}
@@ -4954,13 +4956,14 @@ CTranslatorExprToDXL::PdxlnMotion(CExpression *pexprMotion,
 	motion->AssertValid(pdxlnMotion, false /* validate_children */);
 #endif
 
-	if (fArrow)
+	if (fEngine)
 	{
 		CDXLNode *pdxlnRecv = GPOS_NEW(m_mp) CDXLNode(
 			m_mp, GPOS_NEW(m_mp) CDXLPhysicalEngineConvert(m_mp, true, true));
 		pdxlnRecv->SetProperties(GetProperties(pexprMotion));
-		pdxlnRecv->AddChild(CTranslatorExprToDXLUtils::PdxlnProjListFromChildProjList(
-			m_mp, m_pcf, m_phmcrdxln, proj_list_dxlnode));
+		pdxlnRecv->AddChild(
+			CTranslatorExprToDXLUtils::PdxlnProjListFromChildProjList(
+				m_mp, m_pcf, m_phmcrdxln, proj_list_dxlnode));
 		pdxlnRecv->AddChild(pdxlnMotion);
 		return pdxlnRecv;
 	}
@@ -4991,13 +4994,13 @@ CTranslatorExprToDXL::PdxlnEngineConvert(
 	CPhysicalEngineConvert *popConvert =
 		CPhysicalEngineConvert::PopConvert(pexprConvert->Pop());
 	CDXLPhysicalEngineConvert *dxlop = GPOS_NEW(m_mp)
-		CDXLPhysicalEngineConvert(m_mp, EeeArrow == popConvert->EeTarget());
+		CDXLPhysicalEngineConvert(m_mp, EeeExternal == popConvert->EeTarget());
 
 	// A correlated NLJ yields its inner columns as subplans, which its
 	// consumers inline wherever they reference them. Above a conversion to
-	// Arrow that would be inside the Arrow island, so evaluate them in a PG
+	// the engine that would be inside the engine island, so evaluate them in a PG
 	// Result below the conversion and let the island read plain columns.
-	if (EeeArrow == popConvert->EeTarget())
+	if (EeeExternal == popConvert->EeTarget())
 	{
 		CColRefArray *pdrgpcrSubplan = GPOS_NEW(m_mp) CColRefArray(m_mp);
 		CColRefSetIter crsi(*pexprConvert->DeriveOutputColumns());
@@ -5140,8 +5143,9 @@ CTranslatorExprToDXL::PdxlnSequence(CExpression *pexprSequence,
 
 	// translate children
 	CDXLNodeArray *pdrgpdxlnChildren = GPOS_NEW(m_mp) CDXLNodeArray(m_mp);
-	const BOOL fArrow =
-		EeeArrow == CPhysical::PopConvert(pexprSequence->Pop())->ExecEngine();
+	const BOOL fEngine =
+		EeeExternal ==
+		CPhysical::PopConvert(pexprSequence->Pop())->ExecEngine();
 
 	for (ULONG ul = 0; ul < arity; ul++)
 	{
@@ -5157,9 +5161,9 @@ CTranslatorExprToDXL::PdxlnSequence(CExpression *pexprSequence,
 		CDXLNode *child_dxlnode = CreateDXLNode(
 			pexprChild, pdrgpcrChildOutput, pdrgpdsBaseTables,
 			pulNonGatherMotions, pfDML, false /*fRemap*/, false /*fRoot*/);
-		// an Arrow sequence passes the (segment, payload) rows of the island
+		// an engine sequence passes the (segment, payload) rows of the island
 		// below its last child through to the island above it, as a motion
-		if (fArrow && ul == arity - 1)
+		if (fEngine && ul == arity - 1)
 		{
 			CDXLNode *pdxlnSend = GPOS_NEW(m_mp) CDXLNode(
 				m_mp,
@@ -5197,7 +5201,7 @@ CTranslatorExprToDXL::PdxlnSequence(CExpression *pexprSequence,
 	pdxlopSequence->AssertValid(pdxlnSequence, false /* validate_children */);
 #endif
 
-	if (fArrow)
+	if (fEngine)
 	{
 		CDXLNode *pdxlnRecv = GPOS_NEW(m_mp) CDXLNode(
 			m_mp, GPOS_NEW(m_mp) CDXLPhysicalEngineConvert(m_mp, true, true));

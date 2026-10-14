@@ -88,11 +88,11 @@ EExecEngine
 CPhysicalSequence::EeRequired(CExpressionHandle &exprhdl,
 							  ULONG child_index) const
 {
-	if (EeeArrow != ExecEngine())
+	if (EeeExternal != ExecEngine())
 	{
 		return ExecEngine();
 	}
-	return child_index + 1 == exprhdl.Arity() ? EeeArrowNative : EeePG;
+	return child_index + 1 == exprhdl.Arity() ? EeeExternalNative : EeePG;
 }
 
 //---------------------------------------------------------------------------

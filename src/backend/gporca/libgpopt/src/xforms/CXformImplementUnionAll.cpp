@@ -11,10 +11,9 @@
 
 #include "gpopt/xforms/CXformImplementUnionAll.h"
 
-#include "gpopt/base/CExecEngine.h"
-
 #include "gpos/base.h"
 
+#include "gpopt/base/CExecEngine.h"
 #include "gpopt/exception.h"
 #include "gpopt/operators/CLogicalUnionAll.h"
 #include "gpopt/operators/CPatternMultiLeaf.h"
@@ -84,13 +83,13 @@ CXformImplementUnionAll::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	pxfres->Add(pexprSerialUnionAll);
 
 	CColRefSet *pcrsOutput = pexpr->DeriveOutputColumns();
-	if (CArrowEngineUtils::FEnabled(EaopComputeScalar) &&
-		CArrowEngineUtils::FColsSupported(pcrsOutput))
+	if (CExternalEngineUtils::FEnabled(EeopComputeScalar) &&
+		CExternalEngineUtils::FColsSupported(pcrsOutput))
 	{
-		CPhysicalUnionAll *popArrow = factory.PopPhysicalUnionAll(mp, false);
-		popArrow->SetExecEngine(EeeArrow);
+		CPhysicalUnionAll *popEngine = factory.PopPhysicalUnionAll(mp, false);
+		popEngine->SetExecEngine(EeeExternal);
 		pdrgpexpr->AddRef();
-		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popArrow, pdrgpexpr));
+		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popEngine, pdrgpexpr));
 	}
 
 	// parallel union alternative to the result if the GUC is on

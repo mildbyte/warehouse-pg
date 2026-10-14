@@ -38,7 +38,6 @@ extern "C" {
 #include "gpopt/engine/CCTEConfig.h"
 #include "gpopt/engine/CEnumeratorConfig.h"
 #include "gpopt/engine/CHint.h"
-#include "gpopt/base/CExecEngine.h"
 #include "gpopt/engine/CStatisticsConfig.h"
 #include "gpopt/eval/CConstExprEvaluatorDXL.h"
 #include "gpopt/exception.h"
@@ -58,6 +57,7 @@ extern "C" {
 #include "gpopt/translate/CTranslatorRelcacheToDXL.h"
 #include "gpopt/translate/CTranslatorUtils.h"
 #include "gpopt/utils/CConstExprEvaluatorProxy.h"
+#include "gpopt/utils/CExternalEngineProxy.h"
 #include "gpopt/utils/gpdbdefs.h"
 #include "gpopt/xforms/CXformFactory.h"
 #include "naucrates/base/CQueryToDXLResult.h"
@@ -91,18 +91,6 @@ const CSystemId default_sysid(IMDId::EmdidGeneral, GPOS_WSZ_STR_LENGTH("GPDB"));
 
 plan_hint_hook_type plan_hint_hook = nullptr;
 const OrcaExternalEngine *orca_external_engine = nullptr;
-
-static BOOL
-ArrowCapability(EArrowCapability kind, ULONG oid)
-{
-	return gpdb::ExternalEngineSupports((int) kind, (Oid) oid);
-}
-
-static DOUBLE
-ArrowCost(EArrowOp op, DOUBLE pg_cost, DOUBLE rows, DOUBLE width)
-{
-	return orca_external_engine->cost((OrcaEngineOp) op, pg_cost, rows, width);
-}
 
 // Check one-to-one mapping of row hint types
 GPOS_CPL_ASSERT(CRowHint::RVT_ABSOLUTE ==
@@ -378,7 +366,8 @@ COptTasks::LoadSearchStrategy(CMemoryPool *mp, char *path)
 //---------------------------------------------------------------------------
 COptimizerConfig *
 COptTasks::CreateOptimizerConfig(CMemoryPool *mp, ICostModel *cost_model,
-								 CPlanHint *plan_hints)
+								 CPlanHint *plan_hints,
+								 IExternalEngine *external_engine)
 {
 	// get chosen plan number, cost threshold
 	ULLONG plan_id = (ULLONG) optimizer_plan_id;
@@ -417,7 +406,8 @@ COptTasks::CreateOptimizerConfig(CMemoryPool *mp, ICostModel *cost_model,
 				  push_group_by_below_setop_threshold, xform_bind_threshold,
 				  skew_factor),
 		plan_hints,
-		GPOS_NEW(mp) CWindowOids(OID(F_WINDOW_ROW_NUMBER), OID(F_WINDOW_RANK)));
+		GPOS_NEW(mp) CWindowOids(OID(F_WINDOW_ROW_NUMBER), OID(F_WINDOW_RANK)),
+		external_engine);
 }
 
 //---------------------------------------------------------------------------
@@ -919,22 +909,6 @@ COptTasks::OptimizeTask(void *ptr)
 		SetTraceflags(mp, trace_flags, &enabled_trace_flags,
 					  &disabled_trace_flags);
 
-		g_arrow_engine.m_capability = nullptr;
-		g_arrow_engine.m_operators = 0;
-		if (nullptr != orca_external_engine)
-		{
-			OrcaEngineConfig config = {0, 0.0, 0.0};
-			gpdb::ExternalEngineConfigure(&config);
-			g_arrow_engine.m_operators = config.ops;
-			g_arrow_engine.m_min_rows = config.min_rows;
-			g_arrow_engine.m_hash_build_limit = config.hash_build_limit;
-		}
-		if (0 != g_arrow_engine.m_operators)
-		{
-			g_arrow_engine.m_capability = ArrowCapability;
-			g_arrow_engine.m_cost = ArrowCost;
-		}
-
 		// set up relcache MD provider
 		CMDProviderRelcache *relcache_provider =
 			GPOS_NEW(mp) CMDProviderRelcache();
@@ -958,7 +932,8 @@ COptTasks::OptimizeTask(void *ptr)
 			ICostModel *cost_model = GetCostModel(mp, num_segments_for_costing);
 			CPlanHint *plan_hints = GetPlanHints(mp, opt_ctxt->m_query);
 			COptimizerConfig *optimizer_config =
-				CreateOptimizerConfig(mp, cost_model, plan_hints);
+				CreateOptimizerConfig(mp, cost_model, plan_hints,
+									  CExternalEngineProxy::PengineCreate(mp));
 			CConstExprEvaluatorProxy expr_eval_proxy(mp, &mda);
 			IConstExprEvaluator *expr_evaluator =
 				GPOS_NEW(mp) CConstExprEvaluatorDXL(mp, &mda, &expr_eval_proxy);

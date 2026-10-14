@@ -39,10 +39,10 @@ extern "C" {
 #include "catalog/pg_inherits.h"
 #include "foreign/fdwapi.h"
 #include "nodes/extensible.h"
-#include "optimizer/orca.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
 #include "optimizer/optimizer.h"
+#include "optimizer/orca.h"
 #include "optimizer/plancat.h"
 #include "optimizer/subselect.h"
 #include "parser/parse_agg.h"
@@ -2793,6 +2793,17 @@ gpdb::ExternalEngineConfigure(::OrcaEngineConfig *config)
 		return;
 	}
 	GP_WRAP_END;
+}
+
+double
+gpdb::ExternalEngineCost(const ::OrcaEngineCostInput *input)
+{
+	GP_WRAP_START;
+	{
+		return orca_external_engine->cost(input);
+	}
+	GP_WRAP_END;
+	return 0;
 }
 
 const struct CustomScanMethods *

@@ -347,18 +347,18 @@ private:
 			ctxt_translation_prev_siblings	// translation contexts of previous siblings
 	);
 
-	Plan *TranslateDXLArrowIsland(
+	Plan *TranslateDXLEngineIsland(
 		const CDXLNode *island_dxlnode, CDXLTranslateContext *output_context,
 		CDXLTranslationContextArray *ctxt_translation_prev_siblings);
 
 	// targetlist of (segment, payload) rows referencing varno
-	static List *ArrowIpcTargetList(Index varno);
+	static List *EngineIpcTargetList(Index varno);
 
-	void TranslateDXLArrowMotion(const CDXLNode *motion_dxlnode,
-								 const CDXLNode *island_dxlnode,
-								 CustomScan *island, Motion *motion);
+	void TranslateDXLEngineMotion(const CDXLNode *motion_dxlnode,
+								  const CDXLNode *island_dxlnode,
+								  CustomScan *island, Motion *motion);
 
-	void CollectArrowIslandLeaves(
+	void CollectEngineIslandLeaves(
 		const CDXLNode *dxlnode, CDXLTranslateContext *output_context,
 		CDXLTranslationContextArray *ctxt_translation_prev_siblings,
 		List **leaves);

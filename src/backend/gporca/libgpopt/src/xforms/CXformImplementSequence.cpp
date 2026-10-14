@@ -13,10 +13,10 @@
 
 #include "gpos/base.h"
 
+#include "gpopt/base/CExecEngine.h"
 #include "gpopt/metadata/CTableDescriptor.h"
 #include "gpopt/operators/CLogicalSequence.h"
 #include "gpopt/operators/CPatternMultiLeaf.h"
-#include "gpopt/base/CExecEngine.h"
 #include "gpopt/operators/CPhysicalSequence.h"
 
 using namespace gpopt;
@@ -68,14 +68,14 @@ CXformImplementSequence::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	pxfres->Add(pexprAlt);
 
 	// the memo's outputs include unrequired columns (system columns of
-	// scans); the Arrow last child already passed a conversion of the
+	// scans); the engine last child already passed a conversion of the
 	// columns it ships
-	if (CArrowEngineUtils::FEnabled(EaopMotion))
+	if (CExternalEngineUtils::FEnabled(EeopMotion))
 	{
 		pdrgpexpr->AddRef();
-		CPhysicalSequence *popArrow = GPOS_NEW(mp) CPhysicalSequence(mp);
-		popArrow->SetExecEngine(EeeArrow);
-		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popArrow, pdrgpexpr));
+		CPhysicalSequence *popEngine = GPOS_NEW(mp) CPhysicalSequence(mp);
+		popEngine->SetExecEngine(EeeExternal);
+		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popEngine, pdrgpexpr));
 	}
 }
 

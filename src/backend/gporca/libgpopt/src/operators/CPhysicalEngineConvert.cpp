@@ -35,8 +35,7 @@ CColRefSet *
 CPhysicalEngineConvert::PcrsRequired(CMemoryPool *mp,
 									 CExpressionHandle &exprhdl,
 									 CColRefSet *pcrsRequired,
-									 ULONG child_index, CDrvdPropArray *,
-									 ULONG)
+									 ULONG child_index, CDrvdPropArray *, ULONG)
 {
 	return PcrsChildReqd(mp, exprhdl, pcrsRequired, child_index,
 						 gpos::ulong_max);
@@ -78,8 +77,7 @@ CPhysicalEngineConvert::PrsRequired(CMemoryPool *mp, CExpressionHandle &exprhdl,
 
 BOOL
 CPhysicalEngineConvert::FProvidesReqdCols(CExpressionHandle &exprhdl,
-										  CColRefSet *pcrsRequired,
-										  ULONG) const
+										  CColRefSet *pcrsRequired, ULONG) const
 {
 	return FUnaryProvidesReqdCols(exprhdl, pcrsRequired);
 }

@@ -13,9 +13,9 @@
 
 #include "gpos/base.h"
 
+#include "gpopt/base/CExecEngine.h"
 #include "gpopt/operators/CLogicalSequenceProject.h"
 #include "gpopt/operators/CPatternLeaf.h"
-#include "gpopt/base/CExecEngine.h"
 #include "gpopt/operators/CPhysicalSequenceProject.h"
 
 
@@ -88,9 +88,9 @@ CXformImplementSequenceProject::Transform(CXformContext *pxfctxt,
 	// add alternative to results
 	pxfres->Add(pexprSequenceProject);
 
-	if (CArrowEngineUtils::FWindowSupported(popLogicalSequenceProject) &&
-		CArrowEngineUtils::FScalarSupported(pexprScalar) &&
-		CArrowEngineUtils::FColsSupported(
+	if (CExternalEngineUtils::FWindowSupported(popLogicalSequenceProject) &&
+		CExternalEngineUtils::FScalarSupported(pexprScalar) &&
+		CExternalEngineUtils::FColsSupported(
 			(*pexpr)[1]->DeriveDefinedColumns()))
 	{
 		pexprRelational->AddRef();
@@ -98,10 +98,10 @@ CXformImplementSequenceProject::Transform(CXformContext *pxfctxt,
 		pds->AddRef();
 		pdrgpos->AddRef();
 		pdrgpwf->AddRef();
-		CPhysicalSequenceProject *popArrow =
+		CPhysicalSequenceProject *popEngine =
 			GPOS_NEW(mp) CPhysicalSequenceProject(mp, pds, pdrgpos, pdrgpwf);
-		popArrow->SetExecEngine(EeeArrow);
-		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popArrow, pexprRelational,
+		popEngine->SetExecEngine(EeeExternal);
+		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popEngine, pexprRelational,
 											 pexprScalar));
 	}
 }

@@ -2,7 +2,7 @@
 //	CPhysicalEngineConvert.h
 //
 //	Enforcer for the execution engine property: converts its child's output
-//	to the target engine (PG tuples -> Arrow batches or back). Every other
+//	to the target engine (PG tuples -> engine batches or back). Every other
 //	property passes through unchanged.
 //---------------------------------------------------------------------------
 #ifndef GPOPT_CPhysicalEngineConvert_H
@@ -33,7 +33,7 @@ public:
 	const CHAR *
 	SzId() const override
 	{
-		return EeeArrow == m_target ? "CPhysicalToArrow" : "CPhysicalToPG";
+		return EeeExternal == m_target ? "CPhysicalToEngine" : "CPhysicalToPG";
 	}
 
 	EExecEngine
@@ -108,10 +108,10 @@ public:
 	{
 		// Each side's child must be native to it: no enforcer on top, and (see
 		// CEngine::FCheckReqdProps) no opposite EngineConvert either. That
-		// stops ToArrow and ToPG requesting each other forever, and rules out
-		// a ToArrow straight over a ToPG, which only converts twice. A Motion
+		// stops ToEngine and ToPG requesting each other forever, and rules out
+		// a ToEngine straight over a ToPG, which only converts twice. A Motion
 		// between them stays possible: it is a PG operator.
-		return EeeArrow == m_target ? EeePGNative : EeeArrowNative;
+		return EeeExternal == m_target ? EeePGNative : EeeExternalNative;
 	}
 
 	EExecEngine

@@ -115,10 +115,10 @@ CXformGbAgg2ScalarAgg::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 
 	BOOL fDQA = nullptr != pdrgpcrArgDQA && 0 != pdrgpcrArgDQA->Size();
 	if (COperator::EgbaggtypeIntermediate != popAgg->Egbaggtype() &&
-		CArrowEngineUtils::FEnabled(EaopHashAgg) &&
-		CArrowEngineUtils::FLargeEnough(pexpr) &&
-		CArrowEngineUtils::FColsSupported(pexpr->DeriveOutputColumns()) &&
-		CArrowEngineUtils::FScalarSupported(pexprScalar))
+		CExternalEngineUtils::FEnabled(EeopHashAgg) &&
+		CExternalEngineUtils::FLargeEnough(pexpr) &&
+		CExternalEngineUtils::FColsSupported(pexpr->DeriveOutputColumns()) &&
+		CExternalEngineUtils::FScalarSupported(pexprScalar))
 	{
 		colref_array->AddRef();
 		pexprRel->AddRef();
@@ -127,15 +127,15 @@ CXformGbAgg2ScalarAgg::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 		{
 			pdrgpcrArgDQA->AddRef();
 		}
-		CPhysicalScalarAgg *popArrow = GPOS_NEW(mp) CPhysicalScalarAgg(
+		CPhysicalScalarAgg *popEngine = GPOS_NEW(mp) CPhysicalScalarAgg(
 			mp, colref_array, popAgg->PdrgpcrMinimal(), popAgg->Egbaggtype(),
 			popAgg->FGeneratesDuplicates(), fDQA ? pdrgpcrArgDQA : nullptr,
 			CXformUtils::FMultiStageAgg(pexpr),
 			CXformUtils::FAggGenBySplitDQAXform(pexpr), popAgg->AggStage(),
 			!CXformUtils::FLocalAggCreatedByEagerAggXform(pexpr));
-		popArrow->SetExecEngine(EeeArrow);
+		popEngine->SetExecEngine(EeeExternal);
 		pxfres->Add(GPOS_NEW(mp)
-						CExpression(mp, popArrow, pexprRel, pexprScalar));
+						CExpression(mp, popEngine, pexprRel, pexprScalar));
 	}
 }
 

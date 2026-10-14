@@ -100,7 +100,7 @@ CXformImplementLimit::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	// add alternative to results
 	pxfres->Add(pexprLimit);
 
-	if (CArrowEngineUtils::FEnabled(EaopSort) &&
+	if (CExternalEngineUtils::FEnabled(EeopSort) &&
 		COperator::EopScalarConst == pexprScalarStart->Pop()->Eopid() &&
 		COperator::EopScalarConst == pexprScalarRows->Pop()->Eopid())
 	{
@@ -108,12 +108,12 @@ CXformImplementLimit::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 		pexprScalarStart->AddRef();
 		pexprScalarRows->AddRef();
 		pos->AddRef();
-		CPhysicalLimit *popArrow = GPOS_NEW(mp)
+		CPhysicalLimit *popEngine = GPOS_NEW(mp)
 			CPhysicalLimit(mp, pos, popLimit->FGlobal(), popLimit->FHasCount(),
 						   popLimit->IsTopLimitUnderDMLorCTAS());
-		popArrow->SetExecEngine(EeeArrow);
-		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popArrow, pexprRelational,
-											 pexprScalarStart, pexprScalarRows));
+		popEngine->SetExecEngine(EeeExternal);
+		pxfres->Add(GPOS_NEW(mp) CExpression(
+			mp, popEngine, pexprRelational, pexprScalarStart, pexprScalarRows));
 	}
 }
 

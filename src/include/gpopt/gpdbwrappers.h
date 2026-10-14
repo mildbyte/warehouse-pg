@@ -39,6 +39,7 @@ struct Value;
 using TupleDesc = struct TupleDescData *;
 struct Query;
 struct OrcaEngineConfig;
+struct OrcaEngineCostInput;
 using ScanKey = struct ScanKeyData *;
 struct Bitmapset;
 struct Plan;
@@ -680,9 +681,10 @@ PartitionKey GPDBRelationRetrievePartitionKey(Relation rel);
 
 bool TestexprIsHashable(Node *testexpr, List *param_ids);
 
-// ask the extension whether an oid can run in its Arrow engine
+// calls into orca_external_engine; ask is an OrcaEngineAsk
 void ExternalEngineConfigure(::OrcaEngineConfig *config);
 bool ExternalEngineSupports(int ask, Oid oid);
+double ExternalEngineCost(const ::OrcaEngineCostInput *input);
 
 const struct CustomScanMethods *GetCustomScanMethods(const char *name,
 													 bool missing_ok);

@@ -49,13 +49,13 @@ public:
 	// output distribution accessor
 	virtual CDistributionSpec *Pds() const = 0;
 
-	// An Arrow motion over a ToArrow would ship rows PG can ship itself
+	// An engine motion over a ToEngine would ship rows PG can ship itself
 	// through an island that only converts them, so its input must be a real
-	// Arrow operator.
+	// engine operator.
 	EExecEngine
 	EeRequired(CExpressionHandle &, ULONG) const override
 	{
-		return EeeArrow == ExecEngine() ? EeeArrowNative : ExecEngine();
+		return EeeExternal == ExecEngine() ? EeeExternalNative : ExecEngine();
 	}
 
 	// check if optimization contexts is valid
