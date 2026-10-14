@@ -77,6 +77,7 @@ const CHAR *CParseHandlerTest::m_rgszPlanDXLFileNames[] = {
 	"../data/dxl/parse_tests/q72-BitmapBoolOp.xml",
 	"../data/dxl/parse_tests/q74-DirectDispatchInfo.xml",
 	"../data/dxl/parse_tests/q76-ValuesScan.xml",
+	"../data/dxl/parse_tests/q77-EngineConvert.xml",
 };
 
 // files for tests involving dxl representation of queries

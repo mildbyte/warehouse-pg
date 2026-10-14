@@ -112,6 +112,7 @@ CParseHandlerFactory::Init(CMemoryPool *mp)
 		{EdxltokenPhysicalSort, &CreateSortParseHandler},
 		{EdxltokenPhysicalAppend, &CreateAppendParseHandler},
 		{EdxltokenPhysicalMaterialize, &CreateMaterializeParseHandler},
+		{EdxltokenPhysicalEngineConvert, &CreateEngineConvertParseHandler},
 		{EdxltokenPhysicalDynamicTableScan, &CreateDTSParseHandler},
 		{EdxltokenPhysicalDynamicIndexScan, &CreateDynamicIdxScanParseHandler},
 		{EdxltokenPhysicalDynamicIndexOnlyScan,
@@ -829,6 +830,16 @@ CParseHandlerFactory::CreateMaterializeParseHandler(
 {
 	return GPOS_NEW(mp)
 		CParseHandlerMaterialize(mp, parse_handler_mgr, parse_handler_root);
+}
+
+// creates a parse handler for parsing an engine conversion
+CParseHandlerBase *
+CParseHandlerFactory::CreateEngineConvertParseHandler(
+	CMemoryPool *mp, CParseHandlerManager *parse_handler_mgr,
+	CParseHandlerBase *parse_handler_root)
+{
+	return GPOS_NEW(mp)
+		CParseHandlerEngineConvert(mp, parse_handler_mgr, parse_handler_root);
 }
 
 // creates a parse handler for parsing a dynamic table scan operator

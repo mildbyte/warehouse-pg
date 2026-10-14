@@ -481,6 +481,7 @@
 			<xsd:element name="Sort" type="dxl:SortType"/>
 			<xsd:element name="Append" type="dxl:AppendType"/>
 			<xsd:element name="Materialize" type="dxl:MaterializeType"/>
+			<xsd:element name="EngineConvert" type="dxl:EngineConvertType"/>
 			<xsd:element name="DynamicTableScan" type="dxl:DynamicTableScanType"/>
 			<xsd:element name="PartitionSelector" type="dxl:PartitionSelectorType"/>
 			<xsd:element name="Sequence" type="dxl:SequenceType"/>
@@ -909,6 +910,23 @@
 	</xsd:complexType>
 	
 	
+	<!-- Engine boundary: ToEngine="false" is the root of an external engine
+	     region, ToEngine="true" one of its leaves. Ipc marks a conversion at an
+	     engine motion, which ships serialized batches. -->
+	<xsd:complexType name="EngineConvertType">
+		<xsd:complexContent>
+			<xsd:extension base="dxl:PhysicalOpType">
+				<xsd:sequence>
+					<xsd:element name="ProjList" type="dxl:ProjectListType"/>
+					<!-- Child -->
+					<xsd:group ref="dxl:PhysicalOp"/>
+				</xsd:sequence>
+				<xsd:attribute name="ToEngine" type="xsd:boolean" use="required"/>
+				<xsd:attribute name="Ipc" type="xsd:boolean" use="optional"/>
+			</xsd:extension>
+		</xsd:complexContent>
+	</xsd:complexType>
+
 	<xsd:complexType name="PhysicalJoinType">
 		<xsd:complexContent>
 			<xsd:extension base="dxl:PhysicalOpType">				

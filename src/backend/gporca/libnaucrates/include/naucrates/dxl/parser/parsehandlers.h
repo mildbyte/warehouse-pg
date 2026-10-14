@@ -88,6 +88,7 @@
 #include "naucrates/dxl/parser/CParseHandlerMDRequest.h"
 #include "naucrates/dxl/parser/CParseHandlerMDScCmp.h"
 #include "naucrates/dxl/parser/CParseHandlerMDType.h"
+#include "naucrates/dxl/parser/CParseHandlerEngineConvert.h"
 #include "naucrates/dxl/parser/CParseHandlerMaterialize.h"
 #include "naucrates/dxl/parser/CParseHandlerMergeJoin.h"
 #include "naucrates/dxl/parser/CParseHandlerMetadata.h"

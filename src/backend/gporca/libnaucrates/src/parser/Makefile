@@ -83,6 +83,7 @@ OBJS        = CParseHandlerAgg.o \
               CParseHandlerMDScCmp.o \
               CParseHandlerMDType.o \
               CParseHandlerManager.o \
+              CParseHandlerEngineConvert.o \
               CParseHandlerMaterialize.o \
               CParseHandlerMergeJoin.o \
               CParseHandlerMetadata.o \

@@ -336,6 +336,11 @@ private:
 		CMemoryPool *mp, CParseHandlerManager *parse_handler_mgr,
 		CParseHandlerBase *parse_handler_root);
 
+	// construct an engine conversion parse handler
+	static CParseHandlerBase *CreateEngineConvertParseHandler(
+		CMemoryPool *mp, CParseHandlerManager *parse_handler_mgr,
+		CParseHandlerBase *parse_handler_root);
+
 	// construct a materialize parse handler
 	static CParseHandlerBase *CreateMaterializeParseHandler(
 		CMemoryPool *mp, CParseHandlerManager *parse_handler_mgr,

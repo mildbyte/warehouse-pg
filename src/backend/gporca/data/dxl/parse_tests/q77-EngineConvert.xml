@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+  <dxl:Plan Id="0" SpaceSize="0">
+    <dxl:EngineConvert ToEngine="false">
+      <dxl:Properties>
+        <dxl:Cost StartupCost="1" TotalCost="5" Rows="10" Width="4"/>
+      </dxl:Properties>
+      <dxl:ProjList>
+        <dxl:ProjElem ColId="1" Alias="A">
+          <dxl:Ident ColId="1" ColName="A" TypeMdid="0.23.1.0"/>
+        </dxl:ProjElem>
+      </dxl:ProjList>
+      <dxl:EngineConvert ToEngine="true" Ipc="true">
+        <dxl:Properties>
+          <dxl:Cost StartupCost="1" TotalCost="5" Rows="10" Width="4"/>
+        </dxl:Properties>
+        <dxl:ProjList>
+          <dxl:ProjElem ColId="1" Alias="A">
+            <dxl:Ident ColId="1" ColName="A" TypeMdid="0.23.1.0"/>
+          </dxl:ProjElem>
+        </dxl:ProjList>
+        <dxl:GatherMotion InputSegments="0,1" OutputSegments="-1">
+          <dxl:Properties>
+            <dxl:Cost StartupCost="1" TotalCost="5" Rows="10" Width="4"/>
+          </dxl:Properties>
+          <dxl:ProjList>
+            <dxl:ProjElem ColId="1" Alias="A">
+              <dxl:Ident ColId="1" ColName="A" TypeMdid="0.23.1.0"/>
+            </dxl:ProjElem>
+          </dxl:ProjList>
+          <dxl:Filter/>
+          <dxl:SortingColumnList/>
+          <dxl:EngineConvert ToEngine="false" Ipc="true">
+            <dxl:Properties>
+              <dxl:Cost StartupCost="1" TotalCost="5" Rows="10" Width="4"/>
+            </dxl:Properties>
+            <dxl:ProjList>
+              <dxl:ProjElem ColId="1" Alias="A">
+                <dxl:Ident ColId="1" ColName="A" TypeMdid="0.23.1.0"/>
+              </dxl:ProjElem>
+            </dxl:ProjList>
+            <dxl:EngineConvert ToEngine="true">
+              <dxl:Properties>
+                <dxl:Cost StartupCost="1" TotalCost="5" Rows="10" Width="4"/>
+              </dxl:Properties>
+              <dxl:ProjList>
+                <dxl:ProjElem ColId="1" Alias="A">
+                  <dxl:Ident ColId="1" ColName="A" TypeMdid="0.23.1.0"/>
+                </dxl:ProjElem>
+              </dxl:ProjList>
+              <dxl:TableScan>
+                <dxl:Properties>
+                  <dxl:Cost StartupCost="1" TotalCost="5" Rows="10" Width="4"/>
+                </dxl:Properties>
+                <dxl:ProjList>
+                  <dxl:ProjElem ColId="1" Alias="A">
+                    <dxl:Ident ColId="1" ColName="A" TypeMdid="0.23.1.0"/>
+                  </dxl:ProjElem>
+                </dxl:ProjList>
+                <dxl:Filter/>
+                <dxl:TableDescriptor Mdid="6.1234.1.1" TableName="R">
+                  <dxl:Columns>
+                    <dxl:Column ColId="1" Attno="1" ColName="A" TypeMdid="0.23.1.0"/>
+                  </dxl:Columns>
+                </dxl:TableDescriptor>
+              </dxl:TableScan>
+            </dxl:EngineConvert>
+          </dxl:EngineConvert>
+        </dxl:GatherMotion>
+      </dxl:EngineConvert>
+    </dxl:EngineConvert>
+  </dxl:Plan>
+</dxl:DXLMessage>
