@@ -72,10 +72,8 @@ CXformImplementSequence::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	// columns it ships
 	if (CExternalEngineUtils::FEnabled(EeopMotion))
 	{
-		pdrgpexpr->AddRef();
-		CPhysicalSequence *popEngine = GPOS_NEW(mp) CPhysicalSequence(mp);
-		popEngine->SetExecEngine(EeeExternal);
-		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popEngine, pdrgpexpr));
+		CExternalEngineUtils::AddAlternative(
+			mp, pxfres, GPOS_NEW(mp) CPhysicalSequence(mp), pexpr);
 	}
 }
 

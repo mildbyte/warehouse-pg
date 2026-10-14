@@ -10,8 +10,6 @@
 //---------------------------------------------------------------------------
 #include "gpopt/engine/CEngine.h"
 
-#include <cstdlib>
-
 #include "gpos/base.h"
 #include "gpos/common/CAutoTimer.h"
 #include "gpos/common/syslibwrapper.h"
@@ -2173,6 +2171,10 @@ CEngine::FCheckEnfdProps(CMemoryPool *mp, CGroupExpression *pgexpr,
 	CEnfdProp::EPropEnforcingType epetPartitionPropagation =
 		prpp->Pepp()->Epet(exprhdl, popPhysical, fPartPropagationReqd);
 
+	// get execution engine enforcing type
+	CEnfdProp::EPropEnforcingType epetEngine =
+		popPhysical->EpetEngine(exprhdl, prpp->Ee());
+
 	// Skip adding enforcers entirely if any property determines it to be
 	// 'prohibited'. In this way, a property may veto out the creation of an
 	// enforcer for the current group expression and optimization context.
@@ -2181,19 +2183,6 @@ CEngine::FCheckEnfdProps(CMemoryPool *mp, CGroupExpression *pgexpr,
 	// expression G because it was prohibited, some other group expression H may
 	// decide to add it. And if E is added, it is possible for E to consider both
 	// G and H as its child.
-	CEnfdProp::EPropEnforcingType epetEngine =
-		popPhysical->EpetEngine(exprhdl, prpp->Ee());
-
-	if (nullptr != getenv("ORCA_ENGINE_TRACE"))
-	{
-		CAutoTrace at(m_mp);
-		at.Os() << "ENFD grp " << pgexpr->Pgroup()->Id() << " gexpr "
-				<< pgexpr->Id() << " " << popPhysical->SzId() << "/"
-				<< SzExecEngine(popPhysical->ExecEngine()) << " epet o"
-				<< epetOrder << " d" << epetDistribution << " r"
-				<< epetRewindability << " p" << epetPartitionPropagation << " e"
-				<< epetEngine << " req: " << *prpp;
-	}
 	if (FProhibited(epetOrder, epetDistribution, epetRewindability,
 					epetPartitionPropagation) ||
 		CEnfdProp::EpetProhibited == epetEngine)
@@ -2361,13 +2350,6 @@ CEngine::FCheckReqdProps(CExpressionHandle &exprhdl, CReqdPropPlan *prpp,
 		m_pmemo->OsPrint(at.Os());
 	}
 
-	if (nullptr != getenv("ORCA_ENGINE_TRACE"))
-	{
-		CAutoTrace at(m_mp);
-		at.Os() << "REQD grp " << exprhdl.Pgexpr()->Pgroup()->Id() << " gexpr "
-				<< exprhdl.Pgexpr()->Id() << " " << exprhdl.Pop()->SzId()
-				<< " req: " << *prpp;
-	}
 	// check if operator provides required columns
 	if (!prpp->FProvidesReqdCols(m_mp, exprhdl, ulOptReq))
 	{

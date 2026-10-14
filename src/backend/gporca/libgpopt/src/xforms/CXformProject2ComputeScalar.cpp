@@ -85,13 +85,8 @@ CXformProject2ComputeScalar::Transform(CXformContext *pxfctxt,
 			pexprScalar->DeriveDefinedColumns()) &&
 		CExternalEngineUtils::FScalarSupported(pexprScalar))
 	{
-		pexprRelational->AddRef();
-		pexprScalar->AddRef();
-		CPhysicalComputeScalar *popEngine =
-			GPOS_NEW(mp) CPhysicalComputeScalar(mp);
-		popEngine->SetExecEngine(EeeExternal);
-		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popEngine, pexprRelational,
-											 pexprScalar));
+		CExternalEngineUtils::AddAlternative(
+			mp, pxfres, GPOS_NEW(mp) CPhysicalComputeScalar(mp), pexpr);
 	}
 }
 

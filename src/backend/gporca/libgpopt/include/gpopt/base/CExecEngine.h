@@ -66,6 +66,8 @@ SzExecEngine(EExecEngine ee)
 class COrderSpec;
 class CExpressionHandle;
 class CLogicalSequenceProject;
+class CPhysical;
+class CXformResult;
 
 class CExternalEngineUtils
 {
@@ -74,6 +76,15 @@ public:
 	static const IExternalEngine *Pengine();
 
 	static BOOL FEnabled(EEngineOp op);
+
+	static BOOL FHas(EEngineFeature feature);
+
+	static BOOL FSupports(EEngineAsk ask, IMDId *mdid);
+
+	// add pop over pexpr's children to the xform results, running in the
+	// engine; takes pop
+	static void AddAlternative(CMemoryPool *mp, CXformResult *pxfres,
+							   CPhysical *pop, CExpression *pexpr);
 
 	// whether some relational child is big enough to be worth an engine switch
 	static BOOL FLargeEnough(CExpression *pexpr);

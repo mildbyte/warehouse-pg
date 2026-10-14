@@ -98,11 +98,9 @@ CXformImplementCTEProducer::Transform(CXformContext *pxfctxt,
 		CExternalEngineUtils::FColsSupported(pcrs))
 	{
 		colref_array->AddRef();
-		pexprChild->AddRef();
-		CPhysicalCTEProducer *popEngine =
-			GPOS_NEW(mp) CPhysicalCTEProducer(mp, id, colref_array);
-		popEngine->SetExecEngine(EeeExternal);
-		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popEngine, pexprChild));
+		CExternalEngineUtils::AddAlternative(
+			mp, pxfres, GPOS_NEW(mp) CPhysicalCTEProducer(mp, id, colref_array),
+			pexpr);
 	}
 	pcrs->Release();
 }

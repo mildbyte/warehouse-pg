@@ -86,10 +86,8 @@ CXformImplementUnionAll::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	if (CExternalEngineUtils::FEnabled(EeopComputeScalar) &&
 		CExternalEngineUtils::FColsSupported(pcrsOutput))
 	{
-		CPhysicalUnionAll *popEngine = factory.PopPhysicalUnionAll(mp, false);
-		popEngine->SetExecEngine(EeeExternal);
-		pdrgpexpr->AddRef();
-		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popEngine, pdrgpexpr));
+		CExternalEngineUtils::AddAlternative(
+			mp, pxfres, factory.PopPhysicalUnionAll(mp, false), pexpr);
 	}
 
 	// parallel union alternative to the result if the GUC is on

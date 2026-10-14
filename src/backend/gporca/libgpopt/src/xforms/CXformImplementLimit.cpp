@@ -101,19 +101,19 @@ CXformImplementLimit::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	pxfres->Add(pexprLimit);
 
 	if (CExternalEngineUtils::FEnabled(EeopSort) &&
-		COperator::EopScalarConst == pexprScalarStart->Pop()->Eopid() &&
-		COperator::EopScalarConst == pexprScalarRows->Pop()->Eopid())
+		((COperator::EopScalarConst == pexprScalarStart->Pop()->Eopid() &&
+		  COperator::EopScalarConst == pexprScalarRows->Pop()->Eopid()) ||
+		 (CExternalEngineUtils::FHas(EefExprLimit) &&
+		  CExternalEngineUtils::FScalarSupported(pexprScalarStart) &&
+		  CExternalEngineUtils::FScalarSupported(pexprScalarRows))))
 	{
-		pexprRelational->AddRef();
-		pexprScalarStart->AddRef();
-		pexprScalarRows->AddRef();
 		pos->AddRef();
-		CPhysicalLimit *popEngine = GPOS_NEW(mp)
-			CPhysicalLimit(mp, pos, popLimit->FGlobal(), popLimit->FHasCount(),
-						   popLimit->IsTopLimitUnderDMLorCTAS());
-		popEngine->SetExecEngine(EeeExternal);
-		pxfres->Add(GPOS_NEW(mp) CExpression(
-			mp, popEngine, pexprRelational, pexprScalarStart, pexprScalarRows));
+		CExternalEngineUtils::AddAlternative(
+			mp, pxfres,
+			GPOS_NEW(mp) CPhysicalLimit(mp, pos, popLimit->FGlobal(),
+										popLimit->FHasCount(),
+										popLimit->IsTopLimitUnderDMLorCTAS()),
+			pexpr);
 	}
 }
 

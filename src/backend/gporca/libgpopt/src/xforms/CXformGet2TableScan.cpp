@@ -106,16 +106,16 @@ CXformGet2TableScan::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	pxfres->Add(pexprAlt);
 
 	if (CExternalEngineUtils::FEnabled(EeopScan) &&
-		IMDRelation::ErelstorageAppendOnlyCols ==
-			ptabdesc->RetrieveRelStorageType())
+		CExternalEngineUtils::FSupports(EeaskRelation, ptabdesc->MDId()))
 	{
 		ptabdesc->AddRef();
 		pdrgpcrOutput->AddRef();
-		CPhysicalTableScan *popEngine = GPOS_NEW(mp)
-			CPhysicalTableScan(mp, GPOS_NEW(mp) CName(mp, popGet->Name()),
-							   ptabdesc, pdrgpcrOutput);
-		popEngine->SetExecEngine(EeeExternal);
-		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popEngine));
+		CExternalEngineUtils::AddAlternative(
+			mp, pxfres,
+			GPOS_NEW(mp)
+				CPhysicalTableScan(mp, GPOS_NEW(mp) CName(mp, popGet->Name()),
+								   ptabdesc, pdrgpcrOutput),
+			pexpr);
 	}
 }
 

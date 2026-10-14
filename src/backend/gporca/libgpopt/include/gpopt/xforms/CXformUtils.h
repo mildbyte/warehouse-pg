@@ -613,16 +613,17 @@ CXformUtils::TransformImplementBinaryOp(CXformContext *pxfctxt,
 				COperator::EopPhysicalLeftAntiSemiNLJoin == op_id ||
 				COperator::EopPhysicalLeftAntiSemiNLJoinNotIn == op_id);
 
-	// Engine twin: the engine collects the inner side once, so neither
-	// correlated inner sides nor NOT IN semantics are expressible. A join
-	// with a hash-joinable conjunct also gets an engine hash join, which
-	// always beats the engine's NLJ; the NLJ twin would only grow the
-	// search (Q02 planning time 4x).
+	// Engine twin. A join with a hash-joinable conjunct also gets an engine
+	// hash join, which always beats an engine NLJ; the NLJ twin would only
+	// grow the search (Q02 planning time 4x).
 	COperator::EOperatorId eopidNL = pexprBinary->Pop()->Eopid();
 	CExpression *pexprScalarTree =
 		CExternalEngineUtils::PexprScalarTree(pexprScalar);
-	if (COperator::EopPhysicalLeftAntiSemiNLJoinNotIn != eopidNL &&
-		nullptr != pexprScalarTree && !CUtils::HasOuterRefs(pexprRight) &&
+	if ((COperator::EopPhysicalLeftAntiSemiNLJoinNotIn != eopidNL ||
+		 CExternalEngineUtils::FHas(EefNotInNLJoin)) &&
+		nullptr != pexprScalarTree &&
+		(!CUtils::HasOuterRefs(pexprRight) ||
+		 CExternalEngineUtils::FHas(EefCorrelatedJoin)) &&
 		CExternalEngineUtils::FEnabled(EeopHashJoin) &&
 		!CExternalEngineUtils::FHashJoinable(mp, pexpr, pexprScalarTree) &&
 		CExternalEngineUtils::FLargeEnough(pexpr) &&
@@ -630,13 +631,8 @@ CXformUtils::TransformImplementBinaryOp(CXformContext *pxfctxt,
 			pexprScalar->DeriveUsedColumns()) &&
 		CExternalEngineUtils::FScalarSupported(pexprScalarTree))
 	{
-		pexprLeft->AddRef();
-		pexprRight->AddRef();
-		pexprScalar->AddRef();
-		T *popEngine = GPOS_NEW(mp) T(mp);
-		popEngine->SetExecEngine(EeeExternal);
-		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popEngine, pexprLeft,
-											 pexprRight, pexprScalar));
+		CExternalEngineUtils::AddAlternative(mp, pxfres, GPOS_NEW(mp) T(mp),
+											 pexpr);
 	}
 
 	if (!CHintUtils::SatisfiesJoinTypeHints(
@@ -674,9 +670,8 @@ CXformUtils::AddHashOrMergeJoinAlternative(
 		GPOS_NEW(mp) T(mp, pdrgpexprOuter, pdrgpexprInner, opfamilies,
 					   is_hash_join_null_aware, popLogicalJoin->OriginXform());
 
-	// Engine twin for every hash join type; the engine's null-aware anti
-	// join takes a single key. The key arrays are shared, so take references
-	// before the PG alternative may be released below.
+	// Engine twin for every hash join type. The key arrays are shared, so
+	// take references before the PG alternative may be released below.
 	COperator::EOperatorId eopidJoin = op->Eopid();
 	BOOL fEngine =
 		(COperator::EopPhysicalInnerHashJoin == eopidJoin ||
@@ -686,7 +681,8 @@ CXformUtils::AddHashOrMergeJoinAlternative(
 		 COperator::EopPhysicalLeftAntiSemiHashJoin == eopidJoin ||
 		 COperator::EopPhysicalFullHashJoin == eopidJoin ||
 		 (COperator::EopPhysicalLeftAntiSemiHashJoinNotIn == eopidJoin &&
-		  1 == pdrgpexprOuter->Size())) &&
+		  (1 == pdrgpexprOuter->Size() ||
+		   CExternalEngineUtils::FHas(EefMultiKeyNotIn)))) &&
 		CExternalEngineUtils::FEnabled(EeopHashJoin) &&
 		CExternalEngineUtils::FLargeEnough(pexprJoin) &&
 		CExternalEngineUtils::FColsSupported(
@@ -717,16 +713,12 @@ CXformUtils::AddHashOrMergeJoinAlternative(
 
 	if (fEngine)
 	{
-		for (ULONG ul = 0; ul < 3; ul++)
-		{
-			(*pexprJoin)[ul]->AddRef();
-		}
-		T *popEngine = GPOS_NEW(mp)
-			T(mp, pdrgpexprOuter, pdrgpexprInner, opfamilies,
-			  is_hash_join_null_aware, popLogicalJoin->OriginXform());
-		popEngine->SetExecEngine(EeeExternal);
-		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popEngine, (*pexprJoin)[0],
-											 (*pexprJoin)[1], (*pexprJoin)[2]));
+		CExternalEngineUtils::AddAlternative(
+			mp, pxfres,
+			GPOS_NEW(mp)
+				T(mp, pdrgpexprOuter, pdrgpexprInner, opfamilies,
+				  is_hash_join_null_aware, popLogicalJoin->OriginXform()),
+			pexprJoin);
 	}
 }
 

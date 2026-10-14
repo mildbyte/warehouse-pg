@@ -32,6 +32,16 @@ MATCH(EeaskAgg, ORCA_ENGINE_ASK_AGG);
 MATCH(EeaskAggSplit, ORCA_ENGINE_ASK_AGG_SPLIT);
 MATCH(EeaskMotionKey, ORCA_ENGINE_ASK_MOTION_KEY);
 MATCH(EeaskWindowFunc, ORCA_ENGINE_ASK_WINDOW_FUNC);
+MATCH(EeaskRelation, ORCA_ENGINE_ASK_RELATION);
+MATCH(EefCorrelatedJoin, ORCA_ENGINE_FEATURE_CORRELATED_JOIN);
+MATCH(EefNotInNLJoin, ORCA_ENGINE_FEATURE_NOT_IN_NL_JOIN);
+MATCH(EefMultiKeyNotIn, ORCA_ENGINE_FEATURE_MULTI_KEY_NOT_IN);
+MATCH(EefExprLimit, ORCA_ENGINE_FEATURE_EXPR_LIMIT);
+MATCH(EefWindowMixedOrder, ORCA_ENGINE_FEATURE_WINDOW_MIXED_ORDER);
+MATCH(EefWindowRangeOffset, ORCA_ENGINE_FEATURE_WINDOW_RANGE_OFFSET);
+MATCH(EefWindowExprOffset, ORCA_ENGINE_FEATURE_WINDOW_EXPR_OFFSET);
+MATCH(EefWindowExclusion, ORCA_ENGINE_FEATURE_WINDOW_EXCLUSION);
+MATCH(EefArrayExpr, ORCA_ENGINE_FEATURE_ARRAY_EXPR);
 MATCH(EejNone, ORCA_ENGINE_JOIN_NONE);
 MATCH(EejInner, ORCA_ENGINE_JOIN_INNER);
 MATCH(EejLeft, ORCA_ENGINE_JOIN_LEFT);
@@ -42,7 +52,7 @@ MATCH(EejAnti, ORCA_ENGINE_JOIN_ANTI);
 MATCH(EejAntiNotIn, ORCA_ENGINE_JOIN_ANTI_NOT_IN);
 
 CExternalEngineProxy::CExternalEngineProxy(CMemoryPool *mp)
-	: m_mp(mp), m_config{0, 0.0}
+	: m_mp(mp), m_config{0, 0, 0.0}
 {
 	gpdb::ExternalEngineConfigure(&m_config);
 }
@@ -67,6 +77,12 @@ BOOL
 CExternalEngineProxy::FEnabled(EEngineOp op) const
 {
 	return 0 != (m_config.ops & (1u << op));
+}
+
+BOOL
+CExternalEngineProxy::FHas(EEngineFeature feature) const
+{
+	return 0 != (m_config.features & (1u << feature));
 }
 
 DOUBLE

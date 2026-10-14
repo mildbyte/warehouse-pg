@@ -93,16 +93,13 @@ CXformImplementSequenceProject::Transform(CXformContext *pxfctxt,
 		CExternalEngineUtils::FColsSupported(
 			(*pexpr)[1]->DeriveDefinedColumns()))
 	{
-		pexprRelational->AddRef();
-		pexprScalar->AddRef();
 		pds->AddRef();
 		pdrgpos->AddRef();
 		pdrgpwf->AddRef();
-		CPhysicalSequenceProject *popEngine =
-			GPOS_NEW(mp) CPhysicalSequenceProject(mp, pds, pdrgpos, pdrgpwf);
-		popEngine->SetExecEngine(EeeExternal);
-		pxfres->Add(GPOS_NEW(mp) CExpression(mp, popEngine, pexprRelational,
-											 pexprScalar));
+		CExternalEngineUtils::AddAlternative(
+			mp, pxfres,
+			GPOS_NEW(mp) CPhysicalSequenceProject(mp, pds, pdrgpos, pdrgpwf),
+			pexpr);
 	}
 }
 

@@ -51,8 +51,25 @@ enum EEngineAsk
 	EeaskAggSplit,	  // aggregate whose partial state is a plain value
 	EeaskMotionKey,	  // type the engine hashes exactly like cdbhash
 	EeaskWindowFunc,  // window-only function
+	EeaskRelation,	  // table the engine scans itself
 
 	EeaskSentinel
+};
+
+// abilities beyond the baseline every engine is assumed to have
+enum EEngineFeature
+{
+	EefCorrelatedJoin = 0,	// NL join whose inner side has outer references
+	EefNotInNLJoin,			// NL join with NOT IN semantics
+	EefMultiKeyNotIn,		// null-aware anti hash join on several keys
+	EefExprLimit,			// LIMIT/OFFSET that are not constants
+	EefWindowMixedOrder,  // one node's window specs not all prefixes of the first
+	EefWindowRangeOffset,  // RANGE/GROUPS frame offsets
+	EefWindowExprOffset,   // ROWS frame offsets that are not constants
+	EefWindowExclusion,	   // frame exclusion
+	EefArrayExpr,		   // x op ANY/ALL over a non-literal array
+
+	EefSentinel
 };
 
 enum EEngineJoin
@@ -111,6 +128,8 @@ public:
 
 	// whether the engine implements this operator class at all
 	virtual BOOL FEnabled(EEngineOp op) const = 0;
+
+	virtual BOOL FHas(EEngineFeature feature) const = 0;
 
 	// joins/aggs whose inputs are all smaller than this get no engine twin
 	virtual DOUBLE MinRows() const = 0;

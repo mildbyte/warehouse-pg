@@ -45,7 +45,8 @@ typedef enum OrcaEngineAsk
 	ORCA_ENGINE_ASK_AGG,		/* single-stage aggregate */
 	ORCA_ENGINE_ASK_AGG_SPLIT,	/* aggregate whose partial state is a plain value */
 	ORCA_ENGINE_ASK_MOTION_KEY,	/* type the engine hashes exactly like cdbhash */
-	ORCA_ENGINE_ASK_WINDOW_FUNC	/* window-only function */
+	ORCA_ENGINE_ASK_WINDOW_FUNC,	/* window-only function */
+	ORCA_ENGINE_ASK_RELATION	/* table the engine scans itself */
 } OrcaEngineAsk;
 
 typedef enum OrcaEngineOp
@@ -63,6 +64,27 @@ typedef enum OrcaEngineOp
 } OrcaEngineOp;
 
 /*
+ * Optional abilities. Without them Orca keeps the operator in PG: joins with
+ * a correlated inner side or NOT IN nested loop semantics, null-aware anti
+ * joins on several keys, LIMIT/OFFSET that are not constants, windows of one
+ * node whose sort keys are not all prefixes of the first window's, RANGE or
+ * GROUPS frame offsets, ROWS offsets that are not constants, frame
+ * exclusion, and x op ANY/ALL over anything but a literal array.
+ */
+typedef enum OrcaEngineFeature
+{
+	ORCA_ENGINE_FEATURE_CORRELATED_JOIN,
+	ORCA_ENGINE_FEATURE_NOT_IN_NL_JOIN,
+	ORCA_ENGINE_FEATURE_MULTI_KEY_NOT_IN,
+	ORCA_ENGINE_FEATURE_EXPR_LIMIT,
+	ORCA_ENGINE_FEATURE_WINDOW_MIXED_ORDER,
+	ORCA_ENGINE_FEATURE_WINDOW_RANGE_OFFSET,
+	ORCA_ENGINE_FEATURE_WINDOW_EXPR_OFFSET,
+	ORCA_ENGINE_FEATURE_WINDOW_EXCLUSION,
+	ORCA_ENGINE_FEATURE_ARRAY_EXPR
+} OrcaEngineFeature;
+
+/*
  * An engine motion ships an island's output as rows of these two columns:
  * the target segment (for redistribution) and a serialized batch. The
  * sending island's custom_private gets a second String with its route.
@@ -73,6 +95,7 @@ typedef enum OrcaEngineOp
 typedef struct OrcaEngineConfig
 {
 	uint32		ops;			/* bitmask of 1 << OrcaEngineOp; 0 disables */
+	uint32		features;		/* bitmask of 1 << OrcaEngineFeature */
 	double		min_rows;		/* skip joins/aggs whose inputs are all smaller */
 } OrcaEngineConfig;
 

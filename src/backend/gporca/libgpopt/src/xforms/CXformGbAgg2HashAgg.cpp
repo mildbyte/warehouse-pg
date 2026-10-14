@@ -149,8 +149,6 @@ CXformGbAgg2HashAgg::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 		CExternalEngineUtils::FScalarSupported(pexprScalar))
 	{
 		colref_array->AddRef();
-		pexprRel->AddRef();
-		pexprScalar->AddRef();
 		if (fDQA)
 		{
 			pdrgpcrArgDQA->AddRef();
@@ -161,9 +159,7 @@ CXformGbAgg2HashAgg::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 			CXformUtils::FMultiStageAgg(pexpr),
 			CXformUtils::FAggGenBySplitDQAXform(pexpr), popAgg->AggStage(),
 			!CXformUtils::FLocalAggCreatedByEagerAggXform(pexpr));
-		popEngine->SetExecEngine(EeeExternal);
-		pxfres->Add(GPOS_NEW(mp)
-						CExpression(mp, popEngine, pexprRel, pexprScalar));
+		CExternalEngineUtils::AddAlternative(mp, pxfres, popEngine, pexpr);
 	}
 }
 

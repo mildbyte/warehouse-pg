@@ -4,9 +4,6 @@
 
 #include "gpopt/base/CExecEngine.h"
 
-#include <cstdio>
-#include <cstdlib>
-
 #include "gpopt/base/CCastUtils.h"
 #include "gpopt/base/CColRef.h"
 #include "gpopt/base/CColRefSet.h"
@@ -42,20 +39,12 @@
 #include "gpopt/optimizer/COptimizerConfig.h"
 #include "gpopt/search/CGroup.h"
 #include "gpopt/search/CGroupExpression.h"
-#include "naucrates/md/CMDIdGPDB.h"
+#include "gpopt/xforms/CXformResult.h"
 #include "naucrates/md/IMDType.h"
 #include "naucrates/statistics/IStatistics.h"
 
 using namespace gpopt;
 using namespace gpmd;
-
-// prototype: ORCA_ARROW_GAPS=1 logs every refusal to the server log
-static BOOL
-FGapTrace()
-{
-	static const BOOL f = nullptr != std::getenv("ORCA_ARROW_GAPS");
-	return f;
-}
 
 const IExternalEngine *
 CExternalEngineUtils::Pengine()
@@ -65,21 +54,12 @@ CExternalEngineUtils::Pengine()
 							 : nullptr;
 }
 
-static BOOL
-FAsk(EEngineAsk kind, IMDId *mdid)
+BOOL
+CExternalEngineUtils::FSupports(EEngineAsk ask, IMDId *mdid)
 {
-	const IExternalEngine *engine = CExternalEngineUtils::Pengine();
-	if (nullptr == engine || nullptr == mdid || !mdid->IsValid())
-	{
-		return false;
-	}
-	BOOL ok = engine->FSupports(kind, mdid);
-	if (!ok && FGapTrace())
-	{
-		fprintf(stderr, "ARROW_GAP ask %d %u\n", (int) kind,
-				CMDIdGPDB::CastMdid(mdid)->Oid());
-	}
-	return ok;
+	const IExternalEngine *engine = Pengine();
+	return nullptr != engine && nullptr != mdid && mdid->IsValid() &&
+		   engine->FSupports(ask, mdid);
 }
 
 BOOL
@@ -87,6 +67,28 @@ CExternalEngineUtils::FEnabled(EEngineOp op)
 {
 	const IExternalEngine *engine = Pengine();
 	return nullptr != engine && engine->FEnabled(op);
+}
+
+BOOL
+CExternalEngineUtils::FHas(EEngineFeature feature)
+{
+	const IExternalEngine *engine = Pengine();
+	return nullptr != engine && engine->FHas(feature);
+}
+
+void
+CExternalEngineUtils::AddAlternative(CMemoryPool *mp, CXformResult *pxfres,
+									 CPhysical *pop, CExpression *pexpr)
+{
+	pop->SetExecEngine(EeeExternal);
+	CExpressionArray *pdrgpexpr = pexpr->PdrgPexpr();
+	if (nullptr == pdrgpexpr)
+	{
+		pxfres->Add(GPOS_NEW(mp) CExpression(mp, pop));
+		return;
+	}
+	pdrgpexpr->AddRef();
+	pxfres->Add(GPOS_NEW(mp) CExpression(mp, pop, pdrgpexpr));
 }
 
 BOOL
@@ -158,7 +160,7 @@ CExternalEngineUtils::FColsSupported(CColRefSet *pcrs)
 	CColRefSetIter it(*pcrs);
 	while (it.Advance())
 	{
-		if (!FAsk(EeaskType, it.Pcr()->RetrieveType()->MDId()))
+		if (!FSupports(EeaskType, it.Pcr()->RetrieveType()->MDId()))
 		{
 			return false;
 		}
@@ -175,8 +177,8 @@ CExternalEngineUtils::FOrderSupported(COrderSpec *pos)
 	}
 	for (ULONG ul = 0; ul < pos->UlSortColumns(); ul++)
 	{
-		if (!FAsk(EeaskType, pos->Pcr(ul)->RetrieveType()->MDId()) ||
-			!FAsk(EeaskOperator, pos->GetMdIdSortOp(ul)))
+		if (!FSupports(EeaskType, pos->Pcr(ul)->RetrieveType()->MDId()) ||
+			!FSupports(EeaskOperator, pos->GetMdIdSortOp(ul)))
 		{
 			return false;
 		}
@@ -184,11 +186,9 @@ CExternalEngineUtils::FOrderSupported(COrderSpec *pos)
 	return true;
 }
 
-// The engine evaluates every window of one node over the same sorted input
-// and finds peers with each window's own keys, so the first spec (which
-// Orca sorts by) must start with every other spec. RANGE and GROUPS offsets
-// need PG's type-specific in_range functions, and frame exclusion has no
-// engine counterpart.
+// Without EefWindowMixedOrder the engine evaluates every window of one node
+// over the same sorted input and finds peers with each window's own keys, so
+// the first spec (which Orca sorts by) must start with every other spec.
 BOOL
 CExternalEngineUtils::FWindowSupported(CLogicalSequenceProject *pop)
 {
@@ -205,7 +205,8 @@ CExternalEngineUtils::FWindowSupported(CLogicalSequenceProject *pop)
 		{
 			return false;
 		}
-		if (0 < ul && !(*pdrgpos)[0]->FSatisfies(pos))
+		if (0 < ul && !FHas(EefWindowMixedOrder) &&
+			!(*pdrgpos)[0]->FSatisfies(pos))
 		{
 			return false;
 		}
@@ -218,7 +219,7 @@ CExternalEngineUtils::FWindowSupported(CLogicalSequenceProject *pop)
 			continue;
 		}
 		if (CWindowFrame::EfesNone != pwf->Efes() &&
-			CWindowFrame::EfesNulls != pwf->Efes())
+			CWindowFrame::EfesNulls != pwf->Efes() && !FHas(EefWindowExclusion))
 		{
 			return false;
 		}
@@ -235,10 +236,13 @@ CExternalEngineUtils::FWindowSupported(CLogicalSequenceProject *pop)
 					break;
 				case CWindowFrame::EfbBoundedPreceding:
 				case CWindowFrame::EfbBoundedFollowing:
-					if (CWindowFrame::EfsRows != pwf->Efs() ||
-						nullptr == values[edge] ||
-						COperator::EopScalarConst !=
-							values[edge]->Pop()->Eopid())
+					if (nullptr == values[edge] ||
+						(CWindowFrame::EfsRows != pwf->Efs() &&
+						 !FHas(EefWindowRangeOffset)) ||
+						(COperator::EopScalarConst !=
+							 values[edge]->Pop()->Eopid() &&
+						 !FHas(EefWindowExprOffset)) ||
+						!FScalarSupported(values[edge]))
 					{
 						return false;
 					}
@@ -275,52 +279,53 @@ CExternalEngineUtils::FScalarSupported(CExpression *pexpr)
 			break;
 
 		case COperator::EopScalarIdent:
-			return FAsk(
+			return FSupports(
 				EeaskType,
 				CScalarIdent::PopConvert(pop)->Pcr()->RetrieveType()->MDId());
 
 		case COperator::EopScalarConst:
-			return FAsk(EeaskType, CScalarConst::PopConvert(pop)->MdidType());
+			return FSupports(EeaskType,
+							 CScalarConst::PopConvert(pop)->MdidType());
 
 		case COperator::EopScalarIf:
-			if (!FAsk(EeaskType, CScalarIf::PopConvert(pop)->MdidType()))
+			if (!FSupports(EeaskType, CScalarIf::PopConvert(pop)->MdidType()))
 			{
 				return false;
 			}
 			break;
 
 		case COperator::EopScalarCoalesce:
-			if (!FAsk(EeaskType, CScalarCoalesce::PopConvert(pop)->MdidType()))
+			if (!FSupports(EeaskType,
+						   CScalarCoalesce::PopConvert(pop)->MdidType()))
 			{
 				return false;
 			}
 			break;
 
 		case COperator::EopScalarIsDistinctFrom:
-			if (!FAsk(EeaskOperator,
-					  CScalarIsDistinctFrom::PopConvert(pop)->MdIdOp()))
+			if (!FSupports(EeaskOperator,
+						   CScalarIsDistinctFrom::PopConvert(pop)->MdIdOp()))
 			{
 				return false;
 			}
 			break;
 
-		// x op ANY/ALL (literal list); arrays themselves never cross
+		// x op ANY/ALL, by default only over a literal list
 		case COperator::EopScalarArrayCmp:
 		{
-			if (!FAsk(EeaskOperator,
-					  CScalarArrayCmp::PopConvert(pop)->MdIdOp()))
+			if (!FSupports(EeaskOperator,
+						   CScalarArrayCmp::PopConvert(pop)->MdIdOp()))
 			{
 				return false;
 			}
 			CExpression *pexprArray = (*pexpr)[1];
 			if (COperator::EopScalarArray != pexprArray->Pop()->Eopid())
 			{
-				if (FGapTrace())
+				if (!FHas(EefArrayExpr))
 				{
-					fprintf(stderr,
-							"ARROW_GAP op CScalarArrayCmp(non-literal)\n");
+					return false;
 				}
-				return false;
+				break;
 			}
 			for (ULONG ul = 0; ul < pexprArray->Arity(); ul++)
 			{
@@ -335,15 +340,17 @@ CExternalEngineUtils::FScalarSupported(CExpression *pexpr)
 		}
 
 		case COperator::EopScalarCmp:
-			if (!FAsk(EeaskOperator, CScalarCmp::PopConvert(pop)->MdIdOp()))
+			if (!FSupports(EeaskOperator,
+						   CScalarCmp::PopConvert(pop)->MdIdOp()))
 			{
 				return false;
 			}
 			break;
 
 		case COperator::EopScalarOp:
-			if (!FAsk(EeaskOperator, CScalarOp::PopConvert(pop)->MdIdOp()) ||
-				!FAsk(EeaskType, CScalarOp::PopConvert(pop)->MdidType()))
+			if (!FSupports(EeaskOperator,
+						   CScalarOp::PopConvert(pop)->MdIdOp()) ||
+				!FSupports(EeaskType, CScalarOp::PopConvert(pop)->MdidType()))
 			{
 				return false;
 			}
@@ -354,16 +361,17 @@ CExternalEngineUtils::FScalarSupported(CExpression *pexpr)
 			break;
 
 		case COperator::EopScalarSwitch:
-			if (!FAsk(EeaskType, CScalarSwitch::PopConvert(pop)->MdidType()))
+			if (!FSupports(EeaskType,
+						   CScalarSwitch::PopConvert(pop)->MdidType()))
 			{
 				return false;
 			}
 			break;
 
 		case COperator::EopScalarFunc:
-			if (!FAsk(EeaskFunction,
-					  CScalarFunc::PopConvert(pop)->FuncMdId()) ||
-				!FAsk(EeaskType, CScalarFunc::PopConvert(pop)->MdidType()))
+			if (!FSupports(EeaskFunction,
+						   CScalarFunc::PopConvert(pop)->FuncMdId()) ||
+				!FSupports(EeaskType, CScalarFunc::PopConvert(pop)->MdidType()))
 			{
 				return false;
 			}
@@ -372,13 +380,13 @@ CExternalEngineUtils::FScalarSupported(CExpression *pexpr)
 		case COperator::EopScalarCast:
 		{
 			CScalarCast *popCast = CScalarCast::PopConvert(pop);
-			if (!FAsk(EeaskType, popCast->MdidType()))
+			if (!FSupports(EeaskType, popCast->MdidType()))
 			{
 				return false;
 			}
 			IMDId *func = popCast->FuncMdId();
 			if (nullptr != func && func->IsValid() &&
-				!FAsk(EeaskFunction, func))
+				!FSupports(EeaskFunction, func))
 			{
 				return false;
 			}
@@ -390,9 +398,9 @@ CExternalEngineUtils::FScalarSupported(CExpression *pexpr)
 			CScalarWindowFunc *popWin = CScalarWindowFunc::PopConvert(pop);
 			if (popWin->IsDistinct() ||
 				CScalarWindowFunc::EwsImmediate != popWin->Ews() ||
-				!FAsk(popWin->FAgg() ? EeaskAgg : EeaskWindowFunc,
-					  popWin->FuncMdId()) ||
-				!FAsk(EeaskType, popWin->MdidType()))
+				!FSupports(popWin->FAgg() ? EeaskAgg : EeaskWindowFunc,
+						   popWin->FuncMdId()) ||
+				!FSupports(EeaskType, popWin->MdidType()))
 			{
 				return false;
 			}
@@ -419,8 +427,8 @@ CExternalEngineUtils::FScalarSupported(CExpression *pexpr)
 				}
 			}
 			EEngineAsk kind = popAgg->FSplit() ? EeaskAggSplit : EeaskAgg;
-			if (!FAsk(kind, popAgg->MDId()) ||
-				!FAsk(EeaskType, popAgg->MdidType()))
+			if (!FSupports(kind, popAgg->MDId()) ||
+				!FSupports(EeaskType, popAgg->MdidType()))
 			{
 				return false;
 			}
@@ -428,10 +436,6 @@ CExternalEngineUtils::FScalarSupported(CExpression *pexpr)
 		}
 
 		default:
-			if (FGapTrace())
-			{
-				fprintf(stderr, "ARROW_GAP op %s\n", pop->SzId());
-			}
 			return false;
 	}
 
@@ -481,10 +485,10 @@ CExternalEngineUtils::PexprEngineMotion(CMemoryPool *mp,
 			{
 				COperator *popKey = (*pdrgpexpr)[ul]->Pop();
 				if (COperator::EopScalarIdent != popKey->Eopid() ||
-					!FAsk(EeaskMotionKey, CScalarIdent::PopConvert(popKey)
-											  ->Pcr()
-											  ->RetrieveType()
-											  ->MDId()))
+					!FSupports(EeaskMotionKey, CScalarIdent::PopConvert(popKey)
+												   ->Pcr()
+												   ->RetrieveType()
+												   ->MDId()))
 				{
 					return nullptr;
 				}

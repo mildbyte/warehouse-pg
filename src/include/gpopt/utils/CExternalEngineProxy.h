@@ -42,6 +42,8 @@ public:
 
 	BOOL FEnabled(EEngineOp op) const override;
 
+	BOOL FHas(EEngineFeature feature) const override;
+
 	DOUBLE MinRows() const override;
 
 	BOOL FSupports(EEngineAsk ask, IMDId *mdid) const override;
