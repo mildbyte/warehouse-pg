@@ -59,7 +59,7 @@ enum EEngineAsk
 // abilities beyond the baseline every engine is assumed to have
 enum EEngineFeature
 {
-	EefCorrelatedJoin = 0,	// NL join whose inner side has outer references
+	EefCorrelatedJoin = 0,	// outer references (correlated NL joins, subplans)
 	EefNotInNLJoin,			// NL join with NOT IN semantics
 	EefMultiKeyNotIn,		// null-aware anti hash join on several keys
 	EefExprLimit,			// LIMIT/OFFSET that are not constants

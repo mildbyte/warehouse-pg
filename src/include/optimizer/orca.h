@@ -64,9 +64,9 @@ typedef enum OrcaEngineOp
 } OrcaEngineOp;
 
 /*
- * Optional abilities. Without them Orca keeps the operator in PG: joins with
- * a correlated inner side or NOT IN nested loop semantics, null-aware anti
- * joins on several keys, LIMIT/OFFSET that are not constants, windows of one
+ * Optional abilities. Without them Orca keeps the operator in PG: operators
+ * with outer references (correlated joins and subplans), NOT IN nested loop
+ * joins, null-aware anti joins on several keys, LIMIT/OFFSET that are not constants, windows of one
  * node whose sort keys are not all prefixes of the first window's, RANGE or
  * GROUPS frame offsets, ROWS offsets that are not constants, frame
  * exclusion, and x op ANY/ALL over anything but a literal array.

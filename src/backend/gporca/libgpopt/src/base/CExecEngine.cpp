@@ -80,6 +80,13 @@ void
 CExternalEngineUtils::AddAlternative(CMemoryPool *mp, CXformResult *pxfres,
 									 CPhysical *pop, CExpression *pexpr)
 {
+	// a correlated subplan evaluates its body per outer row with the outer
+	// columns bound as parameters
+	if (CUtils::HasOuterRefs(pexpr) && !FHas(EefCorrelatedJoin))
+	{
+		pop->Release();
+		return;
+	}
 	pop->SetExecEngine(EeeExternal);
 	CExpressionArray *pdrgpexpr = pexpr->PdrgPexpr();
 	if (nullptr == pdrgpexpr)

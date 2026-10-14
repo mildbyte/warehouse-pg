@@ -2695,8 +2695,16 @@ CTranslatorExprToDXL::PdxlnRemapOutputColumns(CExpression *pexpr,
 	pcrsOutput->Release();
 
 	// a ToPG emits whatever columns its project list names, so reorder that
-	// rather than add a Result on top of the region
-	if (EdxlopPhysicalEngineConvert ==
+	// rather than add a Result on top of the region; computed columns, such
+	// as correlated subplan outputs, still need the Result
+	BOOL fPlainCols = true;
+	for (ULONG ul = 0; fPlainCols && ul < pdxlnPrLNew->Arity(); ul++)
+	{
+		fPlainCols = EdxlopScalarIdent ==
+					 (*(*pdxlnPrLNew)[ul])[0]->GetOperator()->GetDXLOperator();
+	}
+	if (fPlainCols &&
+		EdxlopPhysicalEngineConvert ==
 			dxlnode->GetOperator()->GetDXLOperator() &&
 		!CDXLPhysicalEngineConvert::Cast(dxlnode->GetOperator())->IsToEngine())
 	{
