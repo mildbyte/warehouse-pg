@@ -11,17 +11,14 @@
 
 #include "gpdbcost/CCostModelGPDB.h"
 
-#include <algorithm>
 #include <limits>
 
 #include "gpopt/base/CColRefSetIter.h"
-#include "gpopt/base/CCostContext.h"
 #include "gpopt/base/CExecEngine.h"
 #include "gpopt/base/COptCtxt.h"
-#include "gpopt/base/COptimizationContext.h"
 #include "gpopt/base/COrderSpec.h"
-#include "gpopt/base/CReqdPropPlan.h"
 #include "gpopt/base/CWindowFrame.h"
+#include "gpopt/base/IEngineRules.h"
 #include "gpopt/engine/CHint.h"
 #include "gpopt/metadata/CIndexDescriptor.h"
 #include "gpopt/metadata/CTableDescriptor.h"
@@ -29,7 +26,6 @@
 #include "gpopt/operators/CExpressionHandle.h"
 #include "gpopt/operators/CPhysicalDynamicIndexOnlyScan.h"
 #include "gpopt/operators/CPhysicalDynamicIndexScan.h"
-#include "gpopt/operators/CPhysicalEngineConvert.h"
 #include "gpopt/operators/CPhysicalHashAgg.h"
 #include "gpopt/operators/CPhysicalIndexOnlyScan.h"
 #include "gpopt/operators/CPhysicalIndexScan.h"
@@ -2407,170 +2403,15 @@ CCostModelGPDB::Cost(
 {
 	GPOS_ASSERT(nullptr != pci);
 
-	COperator::EOperatorId op_id = exprhdl.Pop()->Eopid();
-	BOOL fConvert = COperator::EopPhysicalEngineConvert == op_id;
-	if (!fConvert &&
+	if (COperator::EopPhysicalEngineConvert != exprhdl.Pop()->Eopid() &&
 		EeeExternal != CPhysical::PopConvert(exprhdl.Pop())->ExecEngine())
 	{
 		return CostPG(exprhdl, pci);
 	}
 
-	const IExternalEngine *engine =
-		COptCtxt::PoctxtFromTLS()->GetOptimizerConfig()->GetExternalEngine();
-	GPOS_ASSERT(nullptr != engine);
-
-	auto unit = [this](ULONG id) {
-		return GetCostModelParams()->PcpLookup(id)->Get().Get();
-	};
-	SEngineCostInput in;
-	in.m_sort_tup_width_unit =
-		unit(CCostModelParamsGPDB::EcpSortTupWidthCostUnit);
-	in.m_join_feeding_tup_column_unit =
-		unit(CCostModelParamsGPDB::EcpJoinFeedingTupColumnCostUnit);
-	in.m_join_feeding_tup_width_unit =
-		unit(CCostModelParamsGPDB::EcpJoinFeedingTupWidthCostUnit);
-	in.m_join_output_tup_unit =
-		unit(CCostModelParamsGPDB::EcpJoinOutputTupCostUnit);
-	in.m_rebinds = pci->NumRebinds();
-	in.m_rows = pci->Rows();
-	in.m_width = pci->Width();
-	for (ULONG ul = 0; ul < std::min(pci->ChildCount(), 2U); ul++)
-	{
-		in.m_child_rows[ul] = pci->PdRows()[ul];
-		in.m_child_width[ul] = pci->GetWidth()[ul];
-	}
-
-	if (fConvert)
-	{
-		in.m_op =
-			EeeExternal == CPhysicalEngineConvert::PopConvert(exprhdl.Pop())
-							   ->EeTarget()
-				? EeopToEngine
-				: EeopToPG;
-		// The memo's scans output every column, and pruning happens only at
-		// translation, so pass the columns required above the conversion.
-		CColRefSet *pcrs = GPOS_NEW(m_mp) CColRefSet(m_mp);
-		pcrs->Include(exprhdl.DeriveOutputColumns());
-		if (nullptr != exprhdl.Pcc())
-		{
-			pcrs->Intersection(exprhdl.Pcc()->Poc()->Prpp()->PcrsRequired());
-		}
-		const ULONG ncols = pcrs->Size();
-		const IMDType **types =
-			GPOS_NEW_ARRAY(m_mp, const IMDType *, ncols + 1);
-		DOUBLE *widths = GPOS_NEW_ARRAY(m_mp, DOUBLE, ncols + 1);
-		ULONG ul = 0;
-		CColRefSetIter crsi(*pcrs);
-		while (crsi.Advance())
-		{
-			const CColRef *colref = crsi.Pcr();
-			types[ul] = colref->RetrieveType();
-			widths[ul] = 16;
-			if (nullptr != exprhdl.Pstats())
-			{
-				ULongPtrArray *colids = GPOS_NEW(m_mp) ULongPtrArray(m_mp);
-				colids->Append(GPOS_NEW(m_mp) ULONG(colref->Id()));
-				widths[ul] = exprhdl.Pstats()->Width(colids).Get();
-				colids->Release();
-			}
-			ul++;
-		}
-		pcrs->Release();
-		in.m_ncols = ncols;
-		in.m_col_types = types;
-		in.m_col_widths = widths;
-		DOUBLE local = engine->Cost(in);
-		GPOS_DELETE_ARRAY(types);
-		GPOS_DELETE_ARRAY(widths);
-		return CCost(local) +
-			   CostChildren(m_mp, exprhdl, pci, m_cost_model_params);
-	}
-
-	switch (op_id)
-	{
-		case COperator::EopPhysicalInnerHashJoin:
-			in.m_join = EejInner;
-			break;
-		case COperator::EopPhysicalLeftOuterHashJoin:
-			in.m_join = EejLeft;
-			break;
-		case COperator::EopPhysicalRightOuterHashJoin:
-			in.m_join = EejRight;
-			break;
-		case COperator::EopPhysicalFullHashJoin:
-			in.m_join = EejFull;
-			break;
-		case COperator::EopPhysicalLeftSemiHashJoin:
-			in.m_join = EejSemi;
-			break;
-		case COperator::EopPhysicalLeftAntiSemiHashJoin:
-			in.m_join = EejAnti;
-			break;
-		case COperator::EopPhysicalLeftAntiSemiHashJoinNotIn:
-			in.m_join = EejAntiNotIn;
-			break;
-		default:
-			in.m_join = EejNone;
-	}
-	switch (op_id)
-	{
-		case COperator::EopPhysicalInnerNLJoin:
-		case COperator::EopPhysicalLeftOuterNLJoin:
-		case COperator::EopPhysicalLeftSemiNLJoin:
-		case COperator::EopPhysicalLeftAntiSemiNLJoin:
-			in.m_op = EeopHashJoin;
-			break;
-		case COperator::EopPhysicalSort:
-		case COperator::EopPhysicalLimit:
-			in.m_op = EeopSort;
-			break;
-		case COperator::EopPhysicalComputeScalar:
-			in.m_op = EeopComputeScalar;
-			break;
-		case COperator::EopPhysicalFilter:
-			in.m_op = EeopFilter;
-			break;
-		case COperator::EopPhysicalMotionGather:
-		case COperator::EopPhysicalMotionBroadcast:
-		case COperator::EopPhysicalMotionHashDistribute:
-		case COperator::EopPhysicalMotionRandom:
-		case COperator::EopPhysicalCTEProducer:
-		case COperator::EopPhysicalSequence:
-			in.m_op = EeopMotion;
-			break;
-		case COperator::EopPhysicalSequenceProject:
-			in.m_op = EeopWindow;
-			break;
-		case COperator::EopPhysicalTableScan:
-			in.m_op = EeopScan;
-			break;
-		default:
-			in.m_op = EejNone == in.m_join ? EeopHashAgg : EeopHashJoin;
-	}
-
 	CCost children = CostChildren(m_mp, exprhdl, pci, m_cost_model_params);
-	if (EejNone != in.m_join)
-	{
-		in.m_join_cols =
-			exprhdl.PexprScalarRepChild(2)->DeriveUsedColumns()->Size();
-		// the engine's hash joins never spill, so cost the PG hash join as
-		// if its build fit in memory
-		for (ULONG ul = 0; ul < 2; ul++)
-		{
-			std::swap(pci->PdRows()[0], pci->PdRows()[1]);
-			std::swap(pci->GetWidth()[0], pci->GetWidth()[1]);
-			CCost total = CostHashJoin(m_mp, exprhdl, this, pci, true);
-			(0 == ul ? in.m_pg_cost_swapped : in.m_pg_cost) =
-				std::max(total.Get() - children.Get(), 0.0);
-		}
-	}
-	else
-	{
-		in.m_pg_cost =
-			std::max(CostPG(exprhdl, pci).Get() - children.Get(), 0.0);
-		in.m_pg_cost_swapped = in.m_pg_cost;
-	}
-	return children + CCost(engine->Cost(in));
+	return children + CCost(CExternalEngineUtils::Prules()->CostLocal(
+						  this, exprhdl, pci, children));
 }
 
 CCost

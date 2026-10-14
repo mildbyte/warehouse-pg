@@ -11,9 +11,15 @@
 
 #include "gpos/base.h"
 
+#include "gpopt/cost/ICostModel.h"
 #include "gpopt/operators/CExpression.h"
 #include "gpopt/operators/CExpressionHandle.h"
 #include "gpopt/operators/CPhysical.h"
+
+namespace gpdbcost
+{
+class CCostModelGPDB;
+}
 
 namespace gpopt
 {
@@ -28,7 +34,7 @@ class IEngineRules
 {
 public:
 	// bump on any change to this interface
-	static const ULONG AbiVersion = 1;
+	static const ULONG AbiVersion = 2;
 
 	virtual ~IEngineRules() = default;
 
@@ -57,6 +63,13 @@ public:
 	virtual CExpression *PexprEngineMotion(CMemoryPool *mp,
 										   CExpressionHandle &exprhdl,
 										   CExpression *pexprMotion) const = 0;
+
+	// cost of the engine operator or conversion exprhdl describes, excluding
+	// its children, which cost children
+	virtual DOUBLE CostLocal(const gpdbcost::CCostModelGPDB *model,
+							 CExpressionHandle &exprhdl,
+							 const ICostModel::SCostingInfo *pci,
+							 CCost children) const = 0;
 };
 
 // Compiled into both Orca and the extension, so a build against headers of

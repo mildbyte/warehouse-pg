@@ -78,6 +78,9 @@ public:
 	static BOOL SetRules(const IEngineRules *rules, ULONG abi_version,
 						 ULONG layout);
 
+	// the registered rules, or null
+	static const IEngineRules *Prules();
+
 	// the optimization's external engine, or null
 	static const IExternalEngine *Pengine();
 

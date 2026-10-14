@@ -98,6 +98,12 @@ CExternalEngineUtils::SetRules(const IEngineRules *r, ULONG abi_version,
 	return true;
 }
 
+const IEngineRules *
+CExternalEngineUtils::Prules()
+{
+	return rules;
+}
+
 void
 CExternalEngineUtils::AddAlternative(CMemoryPool *mp, CXformResult *pxfres,
 									 CPhysical *pop, CExpression *pexpr)

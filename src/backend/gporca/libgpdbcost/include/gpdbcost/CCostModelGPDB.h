@@ -248,6 +248,14 @@ public:
 	// main driver for cost computation
 	CCost CostPG(CExpressionHandle &exprhdl, const SCostingInfo *pci) const;
 
+	// hash join cost as if the build side fit in memory
+	CCost
+	CostHashJoinInMemory(CExpressionHandle &exprhdl,
+						 const SCostingInfo *pci) const
+	{
+		return CostHashJoin(m_mp, exprhdl, this, pci, true);
+	}
+
 	CCost Cost(CExpressionHandle &exprhdl,
 			   const SCostingInfo *pci) const override;
 
