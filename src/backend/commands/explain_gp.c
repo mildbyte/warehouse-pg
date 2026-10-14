@@ -1364,10 +1364,14 @@ cdbexplain_formatExtraText(StringInfo str,
 			   isspace(dp[-1]))
 			dp--;
 
-		/* Add to output buffer. */
+		/*
+		 * Add to output buffer.  The first line follows the property label,
+		 * which is already indented.
+		 */
 		if (cp < dp)
 		{
-			appendStringInfoSpaces(str, indent * 2);
+			if (cp != notes)
+				appendStringInfoSpaces(str, indent * 2);
 			if (segindex >= 0)
 			{
 				appendStringInfo(str, "(seg%d) ", segindex);
@@ -1789,8 +1793,9 @@ cdbexplain_showExecStats(struct PlanState *planstate, ExplainState *es)
 
 			resetStringInfo(&extraData);
 
+			/* line up multi-line notes under the node's properties */
 			cdbexplain_formatExtraText(&extraData,
-									   0,
+									   es->format == EXPLAIN_FORMAT_TEXT ? es->indent + 1 : 0,
 									   (ns->ninst == 1) ? -1
 									   : ns->segindexes[i],
 									   ctx->extratextbuf.data + nsi->bnotes,
