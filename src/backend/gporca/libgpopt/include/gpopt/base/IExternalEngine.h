@@ -61,14 +61,14 @@ public:
 	// whether every column's type can cross the engine boundary
 	virtual BOOL FColsSupported(CColRefSet *pcrs) const = 0;
 
-	// whether a sort on the given keys can run in the engine
-	virtual BOOL FOrderSupported(COrderSpec *pos) const = 0;
-
-	// engine twin of a motion enforcer placed over the expression exprhdl
-	// describes, or null when the motion can't ship engine batches
-	virtual CExpression *PexprEngineMotion(CMemoryPool *mp,
-										   CExpressionHandle &exprhdl,
-										   CExpression *pexprMotion) const = 0;
+	// Engine twin of an enforcer (a Sort or Motion, say) placed over the
+	// expression exprhdl describes under a request for output in eeRequired,
+	// or null when the engine shouldn't run it. A twin under a PG request
+	// gets a conversion above it.
+	virtual CExpression *PexprEngineEnforcer(CMemoryPool *mp,
+											 CExpressionHandle &exprhdl,
+											 CExpression *pexprEnforcer,
+											 EExecEngine eeRequired) const = 0;
 
 	// cost of the engine operator or conversion exprhdl describes, excluding
 	// its children, which cost children
@@ -79,7 +79,7 @@ public:
 };
 
 // bump on any change to IExternalEngine or CExternalEngineUtils
-#define GPOPT_EXTERNAL_ENGINE_VERSION "5"
+#define GPOPT_EXTERNAL_ENGINE_VERSION "6"
 
 // gpos/base.h includes pg_config.h, except in standalone Orca builds
 #ifdef PG_VERSION_STR

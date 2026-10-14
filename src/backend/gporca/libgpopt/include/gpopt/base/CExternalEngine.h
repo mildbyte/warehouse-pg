@@ -9,13 +9,14 @@
 
 #include "gpos/base.h"
 
+#include "gpopt/base/CExecEngineSpec.h"
+#include "gpopt/operators/CExpression.h"
+
 namespace gpopt
 {
 using namespace gpos;
 
 class CColRefSet;
-class CExpression;
-class COrderSpec;
 class CExpressionHandle;
 class CXform;
 class CXformResult;
@@ -52,11 +53,11 @@ public:
 
 	static BOOL FColsSupported(CColRefSet *pcrs);
 
-	static BOOL FOrderSupported(COrderSpec *pos);
-
-	static CExpression *PexprEngineMotion(CMemoryPool *mp,
-										  CExpressionHandle &exprhdl,
-										  CExpression *pexprMotion);
+	// append the engine twins of the enforcers in pdrgpexpr
+	static void AppendEngineEnforcers(CMemoryPool *mp,
+									  CExpressionHandle &exprhdl,
+									  CExpressionArray *pdrgpexpr,
+									  EExecEngine eeRequired);
 };
 
 }  // namespace gpopt

@@ -17,6 +17,7 @@
 #include "gpopt/operators/CPhysicalMotionBroadcast.h"
 #include "gpopt/operators/CPhysicalMotionGather.h"
 #include "gpopt/operators/CPhysicalMotionHashDistribute.h"
+#include "gpopt/operators/CPhysicalSort.h"
 #include "gpopt/optimizer/COptimizerConfig.h"
 #include "gpopt/xforms/CXform.h"
 #include "gpopt/xforms/CXformContext.h"
@@ -32,8 +33,8 @@ using namespace gpdbcost;
 namespace
 {
 // An engine that runs scans, filters, projections, hash aggregates, hash
-// joins and CTEs, ships batches over every motion but a merging gather, and costs
-// its operators at half of what PG would.
+// joins, sorts and CTEs, ships batches over every motion but a merging
+// gather, and costs its operators at half of what PG would.
 class CTestEngine : public IExternalEngine
 {
 private:
@@ -111,20 +112,29 @@ public:
 		return true;
 	}
 
-	BOOL
-	FOrderSupported(COrderSpec *) const override
-	{
-		return true;
-	}
-
 	CExpression *
-	PexprEngineMotion(CMemoryPool *mp, CExpressionHandle &exprhdl,
-					  CExpression *pexprMotion) const override
+	PexprEngineEnforcer(CMemoryPool *mp, CExpressionHandle &exprhdl,
+						CExpression *pexprEnforcer,
+						EExecEngine eeRequired) const override
 	{
-		COperator *pop = pexprMotion->Pop();
-		CPhysicalMotion *popEngine = nullptr;
+		COperator *pop = pexprEnforcer->Pop();
+		// only a sort is worth a conversion above it
+		if (COperator::EopPhysicalSort != pop->Eopid() &&
+			EeeExternal != eeRequired)
+		{
+			return nullptr;
+		}
+		CPhysical *popEngine = nullptr;
 		switch (pop->Eopid())
 		{
+			case COperator::EopPhysicalSort:
+			{
+				COrderSpec *pos = const_cast<COrderSpec *>(
+					CPhysicalSort::PopConvert(pop)->Pos());
+				pos->AddRef();
+				popEngine = GPOS_NEW(mp) CPhysicalSort(mp, pos);
+				break;
+			}
 			case COperator::EopPhysicalMotionHashDistribute:
 			{
 				CDistributionSpecHashed *pdsHashed =
@@ -165,7 +175,7 @@ public:
 				return nullptr;
 		}
 		popEngine->SetExecEngine(EeeExternal);
-		CExpression *pexprChild = (*pexprMotion)[0];
+		CExpression *pexprChild = (*pexprEnforcer)[0];
 		pexprChild->AddRef();
 		return GPOS_NEW(mp) CExpression(mp, popEngine, pexprChild);
 	}

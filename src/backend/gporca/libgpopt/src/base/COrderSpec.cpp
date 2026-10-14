@@ -12,7 +12,6 @@
 #include "gpopt/base/COrderSpec.h"
 
 #include "gpopt/base/CColRefSet.h"
-#include "gpopt/base/CExternalEngine.h"
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/operators/CPhysicalSort.h"
 
@@ -216,15 +215,6 @@ COrderSpec::AppendEnforcers(CMemoryPool *mp,
 	CExpression *pexprSort = GPOS_NEW(mp)
 		CExpression(mp, GPOS_NEW(mp) CPhysicalSort(mp, this), pexpr);
 	pdrgpexpr->Append(pexprSort);
-
-	if (CExternalEngineUtils::FOrderSupported(this))
-	{
-		AddRef();
-		pexpr->AddRef();
-		CPhysicalSort *popEngine = GPOS_NEW(mp) CPhysicalSort(mp, this);
-		popEngine->SetExecEngine(EeeExternal);
-		pdrgpexpr->Append(GPOS_NEW(mp) CExpression(mp, popEngine, pexpr));
-	}
 }
 
 

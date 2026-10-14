@@ -2208,26 +2208,8 @@ CEngine::FCheckEnfdProps(CMemoryPool *mp, CGroupExpression *pgexpr,
 								 epetRewindability, exprhdl);
 	prpp->Pepp()->AppendEnforcers(mp, prpp, pdrgpexprEnforcers, pexpr,
 								  epetPartitionPropagation, exprhdl);
-	// under an engine request, each motion also gets a twin shipping engine
-	// batches, which spares the conversions on both sides of it
-	if (EeeExternal == prpp->Pee()->PesRequired()->Eee())
-	{
-		const ULONG ulEnforcers = pdrgpexprEnforcers->Size();
-		for (ULONG ul = 0; ul < ulEnforcers; ul++)
-		{
-			CExpression *pexprEnf = (*pdrgpexprEnforcers)[ul];
-			if (!CUtils::FPhysicalMotion(pexprEnf->Pop()))
-			{
-				continue;
-			}
-			CExpression *pexprEngine =
-				CExternalEngineUtils::PexprEngineMotion(mp, exprhdl, pexprEnf);
-			if (nullptr != pexprEngine)
-			{
-				pdrgpexprEnforcers->Append(pexprEngine);
-			}
-		}
-	}
+	CExternalEngineUtils::AppendEngineEnforcers(
+		mp, exprhdl, pdrgpexprEnforcers, prpp->Pee()->PesRequired()->Eee());
 	prpp->Pee()->AppendEnforcers(mp, prpp, pdrgpexprEnforcers, pexpr,
 								 epetExecEngine, exprhdl);
 

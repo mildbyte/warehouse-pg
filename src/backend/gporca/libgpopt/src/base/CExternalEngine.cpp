@@ -70,20 +70,25 @@ CExternalEngineUtils::FColsSupported(CColRefSet *pcrs)
 	return nullptr != engine && engine->FColsSupported(pcrs);
 }
 
-BOOL
-CExternalEngineUtils::FOrderSupported(COrderSpec *pos)
+void
+CExternalEngineUtils::AppendEngineEnforcers(CMemoryPool *mp,
+											CExpressionHandle &exprhdl,
+											CExpressionArray *pdrgpexpr,
+											EExecEngine eeRequired)
 {
 	const IExternalEngine *engine = Pengine();
-	return nullptr != engine && engine->FOrderSupported(pos);
-}
-
-CExpression *
-CExternalEngineUtils::PexprEngineMotion(CMemoryPool *mp,
-										CExpressionHandle &exprhdl,
-										CExpression *pexprMotion)
-{
-	const IExternalEngine *engine = Pengine();
-	return nullptr != engine
-			   ? engine->PexprEngineMotion(mp, exprhdl, pexprMotion)
-			   : nullptr;
+	if (nullptr == engine)
+	{
+		return;
+	}
+	const ULONG size = pdrgpexpr->Size();
+	for (ULONG ul = 0; ul < size; ul++)
+	{
+		CExpression *pexprEngine = engine->PexprEngineEnforcer(
+			mp, exprhdl, (*pdrgpexpr)[ul], eeRequired);
+		if (nullptr != pexprEngine)
+		{
+			pdrgpexpr->Append(pexprEngine);
+		}
+	}
 }
