@@ -357,12 +357,10 @@ private:
 	// whether the node is a region root shipping (segment, payload) rows
 	static BOOL IsEngineIpc(const CDXLNode *dxlnode);
 
-	// tell the region where its (segment, payload) rows go
-	static void AppendEngineRoute(Plan *region, const char *route);
-
 	void TranslateDXLEngineMotion(const CDXLNode *motion_dxlnode,
-								  const CDXLNode *region_dxlnode,
 								  CustomScan *region, Motion *motion);
+
+	CHAR *SerializeDXL(const CDXLNode *dxlnode);
 
 	void CollectEngineRegionInputs(
 		const CDXLNode *dxlnode, CDXLTranslateContext *output_context,

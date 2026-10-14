@@ -40,7 +40,6 @@ extern "C" {
 #include <algorithm>
 #include <limits>  // std::numeric_limits
 #include <numeric>
-#include <string>
 #include <tuple>
 
 #include "gpos/base.h"
@@ -651,125 +650,54 @@ CTranslatorDXLToPlStmt::TranslateDXLEngineRegion(
 	plan->qual = NIL;
 	cscan->custom_scan_tlist = scan_tlist;
 
-	CWStringDynamic dxl_str(m_mp);
-	COstreamString oss(&dxl_str);
-	CDXLUtils::SerializePlan(
-		m_mp, oss, region_dxlnode, 0 /*plan_id*/, 0 /*plan_space_size*/,
-		true /*serialize_header_footer*/, false /*indentation*/);
-	CHAR *dxl = CTranslatorUtils::CreateMultiByteCharStringFromWCString(
-		dxl_str.GetBuffer());
-	cscan->custom_private = gpdb::LAppend(NIL, gpdb::MakeStringValue(dxl));
+	cscan->custom_private =
+		gpdb::LAppend(NIL, gpdb::MakeStringValue(SerializeDXL(region_dxlnode)));
 
 	SetParamIds(plan);
 	return (Plan *) cscan;
 }
 
-// An engine motion moves the (segment, payload) rows of the region below it.
-// Redistribution becomes an explicit motion on the segment column, which the
-// region computes from the route appended to its custom_private (see
-// IExternalEngine.h).
+// An engine motion moves the (segment, payload) rows of the region below it,
+// which computes the segment column itself: the region's DXL is replaced by
+// that of the motion, which includes it (see IExternalEngine.h).
 void
 CTranslatorDXLToPlStmt::TranslateDXLEngineMotion(const CDXLNode *motion_dxlnode,
-												 const CDXLNode *region_dxlnode,
 												 CustomScan *region,
 												 Motion *motion)
 {
-	CDXLPhysicalMotion *motion_dxlop =
-		CDXLPhysicalMotion::Cast(motion_dxlnode->GetOperator());
-	if (CTranslatorUtils::IsDuplicateSensitiveMotion(motion_dxlop))
-	{
-		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
-				   GPOS_WSZ_LIT("duplicate-sensitive engine motion"));
-	}
-
 	motion->plan.targetlist = EngineIpcTargetList(OUTER_VAR);
 	motion->plan.qual = NIL;
 	motion->sendSorted = false;
 	motion->numSortCols = 0;
 	motion->hashExprs = NIL;
 	motion->hashFuncs = nullptr;
-
-	std::string route;
-	char buf[64];
-	switch (motion_dxlop->GetDXLOperator())
+	switch (motion_dxlnode->GetOperator()->GetDXLOperator())
 	{
 		case EdxlopPhysicalMotionGather:
 			motion->motionType = MOTIONTYPE_GATHER;
-			route = "gather";
 			break;
 		case EdxlopPhysicalMotionBroadcast:
 			motion->motionType = MOTIONTYPE_BROADCAST;
-			route = "broadcast";
 			break;
-		case EdxlopPhysicalMotionRandom:
-			motion->motionType = MOTIONTYPE_EXPLICIT;
-			motion->segidColIdx = 1;
-			snprintf(buf, sizeof(buf), "random %d",
-					 (int) motion_dxlop->GetOutputSegIdsArray()->Size());
-			route = buf;
-			break;
-		case EdxlopPhysicalMotionRedistribute:
-		{
-			motion->motionType = MOTIONTYPE_EXPLICIT;
-			motion->segidColIdx = 1;
-			snprintf(buf, sizeof(buf), "hash %d",
-					 (int) motion_dxlop->GetOutputSegIdsArray()->Size());
-			route = buf;
-			CDXLNode *proj_list =
-				(*region_dxlnode)[EdxlengineconvertIndexProjList];
-			CDXLNode *hash_list = (*motion_dxlnode)[EdxlrmIndexHashExprList];
-			for (ULONG ul = 0; ul < hash_list->Arity(); ul++)
-			{
-				CDXLNode *hash_expr = (*hash_list)[ul];
-				CDXLScalarHashExpr *hash_dxlop =
-					CDXLScalarHashExpr::Cast(hash_expr->GetOperator());
-				const CDXLColRef *colref =
-					CDXLScalarIdent::Cast((*hash_expr)[0]->GetOperator())
-						->GetDXLColRef();
-				ULONG attno = 0;
-				for (ULONG pos = 0; pos < proj_list->Arity(); pos++)
-				{
-					if (CDXLScalarProjElem::Cast(
-							(*proj_list)[pos]->GetOperator())
-							->Id() == colref->Id())
-					{
-						attno = pos + 1;
-						break;
-					}
-				}
-				if (0 == attno)
-				{
-					GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
-							   GPOS_WSZ_LIT("engine motion key not shipped"));
-				}
-				Oid typeoid = CMDIdGPDB::CastMdid(colref->MdidType())->Oid();
-				Oid hashfunc =
-					GPOS_FTRACE(EopttraceConsiderOpfamiliesForDistribution)
-						? gpdb::GetHashProcInOpfamily(
-							  CMDIdGPDB::CastMdid(hash_dxlop->MdidOpfamily())
-								  ->Oid(),
-							  typeoid)
-						: m_dxl_to_plstmt_context
-							  ->GetDistributionHashFuncForType(typeoid);
-				snprintf(buf, sizeof(buf), " %u:%u", attno, hashfunc);
-				route += buf;
-			}
-			break;
-		}
 		default:
-			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
-					   GPOS_WSZ_LIT("unsupported engine motion"));
+			motion->motionType = MOTIONTYPE_EXPLICIT;
+			motion->segidColIdx = 1;
+			break;
 	}
-	AppendEngineRoute((Plan *) region, route.c_str());
+	region->custom_private =
+		gpdb::LAppend(NIL, gpdb::MakeStringValue(SerializeDXL(motion_dxlnode)));
 }
 
-void
-CTranslatorDXLToPlStmt::AppendEngineRoute(Plan *region, const char *route)
+CHAR *
+CTranslatorDXLToPlStmt::SerializeDXL(const CDXLNode *dxlnode)
 {
-	GPOS_ASSERT(IsA(region, CustomScan));
-	CustomScan *cscan = (CustomScan *) region;
-	cscan->custom_private = gpdb::LAppend(
-		cscan->custom_private, gpdb::MakeStringValue(PStrDup(route)));
+	CWStringDynamic dxl_str(m_mp);
+	COstreamString oss(&dxl_str);
+	CDXLUtils::SerializePlan(
+		m_mp, oss, dxlnode, 0 /*plan_id*/, 0 /*plan_space_size*/,
+		true /*serialize_header_footer*/, false /*indentation*/);
+	return CTranslatorUtils::CreateMultiByteCharStringFromWCString(
+		dxl_str.GetBuffer());
 }
 
 BOOL
@@ -2718,8 +2646,8 @@ CTranslatorDXLToPlStmt::TranslateDXLMotion(
 
 	if (IsEngineIpc(child_dxlnode))
 	{
-		TranslateDXLEngineMotion(motion_dxlnode, child_dxlnode,
-								 (CustomScan *) child_plan, motion);
+		TranslateDXLEngineMotion(motion_dxlnode, (CustomScan *) child_plan,
+								 motion);
 		m_dxl_to_plstmt_context->SetCurrentSlice(recvslice);
 		plan->lefttree = child_plan;
 		SetParamIds(plan);
@@ -4381,7 +4309,6 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEProducerToSharedScan(
 	{
 		// an engine producer shares the (segment, payload) rows of its region
 		plan->targetlist = EngineIpcTargetList(OUTER_VAR);
-		AppendEngineRoute(child_plan, "gather");
 	}
 	else
 	{
@@ -4504,13 +4431,12 @@ CTranslatorDXLToPlStmt::TranslateDXLSequence(
 	CDXLTranslateContext child_context(m_mp, false,
 									   output_context->GetColIdToParamIdMap());
 
-	Plan *child_plan = nullptr;
 	for (ULONG ul = 1; ul < arity; ul++)
 	{
 		CDXLNode *child_dxlnode = (*sequence_dxlnode)[ul];
 
-		child_plan = TranslateDXLOperatorToPlan(child_dxlnode, &child_context,
-												ctxt_translation_prev_siblings);
+		Plan *child_plan = TranslateDXLOperatorToPlan(
+			child_dxlnode, &child_context, ctxt_translation_prev_siblings);
 
 		psequence->subplans = gpdb::LAppend(psequence->subplans, child_plan);
 	}
@@ -4525,7 +4451,6 @@ CTranslatorDXLToPlStmt::TranslateDXLSequence(
 	{
 		// an engine sequence passes its last region's (segment, payload) rows
 		plan->targetlist = EngineIpcTargetList(OUTER_VAR);
-		AppendEngineRoute(child_plan, "gather");
 	}
 	else
 	{

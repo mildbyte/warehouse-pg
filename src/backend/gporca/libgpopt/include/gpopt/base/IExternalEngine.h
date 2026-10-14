@@ -13,11 +13,10 @@
 //	the region's DXL plan and custom_plans the PG subplans feeding it, in DXL
 //	pre-order. An engine motion ships a region's output as rows of
 //	(EngineMotionSegidCol int4, EngineMotionPayloadCol bytea): the target
-//	segment and a serialized batch. The sending region's custom_private gets
-//	a second String with its route: "gather", "broadcast",
-//	"random <numsegs>" or "hash <numsegs> <attno>:<hashfunc oid>...", attnos
-//	numbering the region's DXL project list from 1; the region computes the
-//	segment as cdbhash would.
+//	segment and a serialized batch. The sending region gets the DXL of the
+//	motion, with the region below it, in place of its own, and computes the
+//	segment as the motion would; a region shipping to a CTE producer or a
+//	Sequence keeps its own DXL.
 //---------------------------------------------------------------------------
 #ifndef GPOPT_IExternalEngine_H
 #define GPOPT_IExternalEngine_H
