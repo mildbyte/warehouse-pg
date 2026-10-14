@@ -74,10 +74,9 @@ class CExternalEngineUtils
 public:
 	// Register the engine whose regions are CustomScans with the methods
 	// registered as custom_scan_name; false when the engine was built
-	// against an incompatible Orca (see IExternalEngine::AbiVersion).
+	// against another Orca (see SzExternalEngineBuild).
 	static BOOL Register(const CHAR *custom_scan_name,
-						 PfnExternalEngineCreate create, ULONG abi_version,
-						 ULONG layout);
+						 PfnExternalEngineCreate create, const CHAR *build);
 
 	// the registered engine's CustomScan name, or null
 	static const CHAR *SzCustomScanName();

@@ -18,6 +18,8 @@ class CExternalEngineTest
 public:
 	static GPOS_RESULT EresUnittest();
 
+	static GPOS_RESULT EresUnittest_Register();
+
 	static GPOS_RESULT EresUnittest_RunMinidumps();
 };
 }  // namespace gpopt

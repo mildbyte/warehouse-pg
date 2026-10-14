@@ -4,6 +4,8 @@
 
 #include "gpopt/base/CExecEngine.h"
 
+#include "gpos/common/clibwrapper.h"
+
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/base/IExternalEngine.h"
 #include "gpopt/optimizer/COptimizerConfig.h"
@@ -26,10 +28,9 @@ PfnExternalEngineCreate create = nullptr;
 
 BOOL
 CExternalEngineUtils::Register(const CHAR *name, PfnExternalEngineCreate pfn,
-							   ULONG abi_version, ULONG layout)
+							   const CHAR *build)
 {
-	if (IExternalEngine::AbiVersion != abi_version ||
-		UlExternalEngineLayout() != layout)
+	if (0 != clib::Strcmp(SzExternalEngineBuild(), build))
 	{
 		return false;
 	}

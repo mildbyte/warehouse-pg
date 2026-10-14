@@ -271,16 +271,44 @@ EresRunMinidump(CMemoryPool *mp, const CHAR *file_name)
 	GPOS_DELETE(pdxlmd);
 	return eres;
 }
+IExternalEngine *
+PengineTestCreate(CMemoryPool *mp)
+{
+	return GPOS_NEW(mp) CTestEngine();
+}
+
 }  // namespace
 
 GPOS_RESULT
 CExternalEngineTest::EresUnittest()
 {
 	CUnittest rgut[] = {
+		GPOS_UNITTEST_FUNC(CExternalEngineTest::EresUnittest_Register),
 		GPOS_UNITTEST_FUNC(CExternalEngineTest::EresUnittest_RunMinidumps),
 	};
 
 	return CUnittest::EresExecute(rgut, GPOS_ARRAY_SIZE(rgut));
+}
+
+// an engine built against another Orca is refused
+GPOS_RESULT
+CExternalEngineTest::EresUnittest_Register()
+{
+	CAutoMemoryPool amp;
+	CMemoryPool *mp = amp.Pmp();
+
+	GPOS_UNITTEST_ASSERT(!CExternalEngineUtils::Register(
+		"test", PengineTestCreate, "4 another Orca"));
+	GPOS_UNITTEST_ASSERT(nullptr == CExternalEngineUtils::PengineCreate(mp));
+
+	GPOS_UNITTEST_ASSERT(CExternalEngineUtils::Register(
+		"test", PengineTestCreate, SzExternalEngineBuild()));
+	IExternalEngine *engine = CExternalEngineUtils::PengineCreate(mp);
+	GPOS_UNITTEST_ASSERT(nullptr != engine);
+	engine->Release();
+
+	CExternalEngineUtils::Register(nullptr, nullptr, SzExternalEngineBuild());
+	return GPOS_OK;
 }
 
 GPOS_RESULT

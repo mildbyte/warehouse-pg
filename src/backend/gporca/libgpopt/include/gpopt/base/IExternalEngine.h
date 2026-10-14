@@ -26,9 +26,7 @@
 
 #include "gpopt/base/CExecEngine.h"
 #include "gpopt/cost/ICostModel.h"
-#include "gpopt/operators/CExpression.h"
-#include "gpopt/operators/CExpressionHandle.h"
-#include "gpopt/operators/CPhysical.h"
+
 
 namespace gpdbcost
 {
@@ -40,6 +38,8 @@ namespace gpopt
 using namespace gpos;
 
 class CColRefSet;
+class CExpression;
+class CExpressionHandle;
 class COrderSpec;
 class CXform;
 class CXformResult;
@@ -50,9 +50,6 @@ const CHAR *const EngineMotionPayloadCol = "engine_payload";
 class IExternalEngine : public CRefCount
 {
 public:
-	// bump on any change to this interface
-	static const ULONG AbiVersion = 4;
-
 	~IExternalEngine() override = default;
 
 	// add engine alternatives after pxform added results to pxfres from
@@ -81,14 +78,31 @@ public:
 							 CCost children) const = 0;
 };
 
-// Compiled into both Orca and the extension, so a build against headers of
-// another Orca revision or configuration is refused at registration.
-inline ULONG
-UlExternalEngineLayout()
+// bump on any change to IExternalEngine or CExternalEngineUtils
+#define GPOPT_EXTERNAL_ENGINE_VERSION "5"
+
+// gpos/base.h includes pg_config.h, except in standalone Orca builds
+#ifdef PG_VERSION_STR
+#define GPOPT_EXTERNAL_ENGINE_SERVER PG_VERSION_STR
+#else
+#define GPOPT_EXTERNAL_ENGINE_SERVER "standalone Orca"
+#endif
+
+#ifdef GPOS_DEBUG
+#define GPOPT_EXTERNAL_ENGINE_ASSERTS " GPOS_DEBUG"
+#else
+#define GPOPT_EXTERNAL_ENGINE_ASSERTS ""
+#endif
+
+// The Orca build an engine is compiled against: interface version, server
+// version and compiler, and whether Orca asserts, which changes class
+// layouts. An engine builds against the exact headers of the server that
+// loads it, the only stable ABI Orca has; Register refuses any other build.
+inline const CHAR *
+SzExternalEngineBuild()
 {
-	return (ULONG)(sizeof(CExpression) ^ (sizeof(CPhysical) << 8) ^
-				   (sizeof(CExpressionHandle) << 16) ^
-				   (sizeof(IExternalEngine) << 24));
+	return GPOPT_EXTERNAL_ENGINE_VERSION
+		" " GPOPT_EXTERNAL_ENGINE_SERVER GPOPT_EXTERNAL_ENGINE_ASSERTS;
 }
 
 }  // namespace gpopt
