@@ -413,7 +413,6 @@ public:
 	virtual CEnfdProp::EPropEnforcingType EpetPartitionPropagation(
 		CExpressionHandle &exprhdl, const CEnfdPartitionPropagation *per) const;
 
-	// order matching type
 	EExecEngine
 	ExecEngine() const
 	{
@@ -447,6 +446,7 @@ public:
 	virtual CEnfdProp::EPropEnforcingType EpetEngine(
 		CExpressionHandle &exprhdl, EExecEngine eeRequired) const;
 
+	// order matching type
 	virtual CEnfdOrder::EOrderMatching Eom(CReqdPropPlan *prppInput,
 										   ULONG child_index,
 										   CDrvdPropArray *pdrgpdpCtxt,

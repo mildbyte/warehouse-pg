@@ -1040,9 +1040,6 @@ CPhysical::PppsDerive(CMemoryPool *mp, CExpressionHandle &exprhdl) const
 	return pps_result;
 }
 
-// EOF
-
-
 CEnfdProp::EPropEnforcingType
 CPhysical::EpetEngine(CExpressionHandle &exprhdl, EExecEngine eeRequired) const
 {
@@ -1053,3 +1050,5 @@ CPhysical::EpetEngine(CExpressionHandle &exprhdl, EExecEngine eeRequired) const
 	return FEeNative(eeRequired) ? CEnfdProp::EpetProhibited
 								 : CEnfdProp::EpetRequired;
 }
+
+// EOF
