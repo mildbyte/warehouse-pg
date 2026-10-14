@@ -2638,6 +2638,21 @@ CTranslatorExprToDXL::PdrgpcrMerge(CMemoryPool *mp, CColRefArray *pdrgpcrOrder,
 	return pdrgpcrMerge;
 }
 
+// whether a project list computes anything rather than naming columns
+static BOOL
+FProjListComputes(const CDXLNode *pdxlnPrL)
+{
+	for (ULONG ul = 0; ul < pdxlnPrL->Arity(); ul++)
+	{
+		if (EdxlopScalarIdent !=
+			(*(*pdxlnPrL)[ul])[0]->GetOperator()->GetDXLOperator())
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 //---------------------------------------------------------------------------
 //	@function:
 //		CTranslatorExprToDXL::PdxlnRemapOutputColumns
@@ -2685,13 +2700,7 @@ CTranslatorExprToDXL::PdxlnRemapOutputColumns(CExpression *pexpr,
 	// a ToPG emits whatever columns its project list names, so reorder that
 	// rather than add a Result on top of the region; computed columns, such
 	// as correlated subplan outputs, still need the Result
-	BOOL fPlainCols = true;
-	for (ULONG ul = 0; fPlainCols && ul < pdxlnPrLNew->Arity(); ul++)
-	{
-		fPlainCols = EdxlopScalarIdent ==
-					 (*(*pdxlnPrLNew)[ul])[0]->GetOperator()->GetDXLOperator();
-	}
-	if (fPlainCols &&
+	if (!FProjListComputes(pdxlnPrLNew) &&
 		EdxlopPhysicalEngineConvert ==
 			dxlnode->GetOperator()->GetDXLOperator() &&
 		!CDXLPhysicalEngineConvert::Cast(dxlnode->GetOperator())->IsToEngine())
@@ -4974,11 +4983,15 @@ CTranslatorExprToDXL::PdxlnEngineConvert(
 
 	// A correlated NLJ yields its inner columns as subplans, which its
 	// consumers inline wherever they reference them. Above a conversion to
-	// the engine that would be inside the engine region, so evaluate them in a PG
-	// Result below the conversion and let the region read plain columns.
+	// the engine that would be inside the engine region, so evaluate them in a
+	// PG Result below the conversion and let the region read plain columns.
 	if (EeeExternal == popConvert->EeTarget())
 	{
-		CColRefArray *pdrgpcrSubplan = GPOS_NEW(m_mp) CColRefArray(m_mp);
+		CDXLNode *pdxlnPrL =
+			CTranslatorExprToDXLUtils::PdxlnProjListFromChildProjList(
+				m_mp, m_pcf, m_phmcrdxln, (*child_dxlnode)[0]);
+		// copying the child's columns replaced their subplans in the map, so
+		// the subplans left are outputs the child doesn't list
 		CColRefSetIter crsi(*pexprConvert->DeriveOutputColumns());
 		while (crsi.Advance())
 		{
@@ -4987,47 +5000,20 @@ CTranslatorExprToDXL::PdxlnEngineConvert(
 				EdxlopScalarSubPlan ==
 					pdxlnMapped->GetOperator()->GetDXLOperator())
 			{
-				pdrgpcrSubplan->Append(crsi.Pcr());
+				pdxlnPrL->AddChild(CTranslatorExprToDXLUtils::PdxlnProjElem(
+					m_mp, m_phmcrdxln, crsi.Pcr()));
 			}
 		}
-		if (0 < pdrgpcrSubplan->Size())
+		if (FProjListComputes(pdxlnPrL))
 		{
-			CDXLNode *pdxlnProjList = (*child_dxlnode)[0];
-			CDXLNode *pdxlnProjListNew = GPOS_NEW(m_mp)
-				CDXLNode(m_mp, GPOS_NEW(m_mp) CDXLScalarProjList(m_mp));
-			CColRefSet *pcrsDone = GPOS_NEW(m_mp) CColRefSet(m_mp);
-			for (ULONG ul = 0; ul < pdxlnProjList->Arity(); ul++)
-			{
-				CDXLNode *pdxlnPrEl = (*pdxlnProjList)[ul];
-				pcrsDone->Include(m_pcf->LookupColRef(
-					CDXLScalarProjElem::Cast(pdxlnPrEl->GetOperator())->Id()));
-				pdxlnProjListNew->AddChild(
-					CTranslatorExprToDXLUtils::PdxlnProjElem(
-						m_mp, m_pcf, m_phmcrdxln, pdxlnPrEl));
-			}
-			for (ULONG ul = 0; ul < pdrgpcrSubplan->Size(); ul++)
-			{
-				CColRef *colref = (*pdrgpcrSubplan)[ul];
-				if (!pcrsDone->FMember(colref))
-				{
-					pdxlnProjListNew->AddChild(
-						CTranslatorExprToDXLUtils::PdxlnProjElem(
-							m_mp, m_phmcrdxln, colref));
-				}
-			}
-			pcrsDone->Release();
-			CDXLNode *pdxlnResult = GPOS_NEW(m_mp)
-				CDXLNode(m_mp, GPOS_NEW(m_mp) CDXLPhysicalResult(m_mp));
-			pdxlnResult->SetProperties(
-				CTranslatorExprToDXLUtils::PdxlpropCopy(m_mp, child_dxlnode));
-			pdxlnResult->AddChild(pdxlnProjListNew);
-			pdxlnResult->AddChild(PdxlnFilter(nullptr));
-			pdxlnResult->AddChild(GPOS_NEW(m_mp) CDXLNode(
-				m_mp, GPOS_NEW(m_mp) CDXLScalarOneTimeFilter(m_mp)));
-			pdxlnResult->AddChild(child_dxlnode);
-			child_dxlnode = pdxlnResult;
+			child_dxlnode = PdxlnResult(
+				CTranslatorExprToDXLUtils::PdxlpropCopy(m_mp, child_dxlnode),
+				pdxlnPrL, child_dxlnode);
 		}
-		pdrgpcrSubplan->Release();
+		else
+		{
+			pdxlnPrL->Release();
+		}
 	}
 
 	return PdxlnEngineConvert(GetProperties(pexprConvert),
