@@ -65,6 +65,7 @@ SzExecEngine(EExecEngine ee)
 
 class COrderSpec;
 class CExpressionHandle;
+class IEngineRules;
 class CLogicalSequenceProject;
 class CPhysical;
 class CXformResult;
@@ -72,6 +73,11 @@ class CXformResult;
 class CExternalEngineUtils
 {
 public:
+	// install the engine's placement rules; false when they were built
+	// against an incompatible Orca
+	static BOOL SetRules(const IEngineRules *rules, ULONG abi_version,
+						 ULONG layout);
+
 	// the optimization's external engine, or null
 	static const IExternalEngine *Pengine();
 
