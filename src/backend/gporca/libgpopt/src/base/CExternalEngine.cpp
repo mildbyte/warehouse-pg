@@ -39,6 +39,13 @@ CExternalEngineUtils::Register(const CHAR *name, PfnExternalEngineCreate pfn,
 	return true;
 }
 
+void
+CExternalEngineUtils::Unregister()
+{
+	custom_scan_name = nullptr;
+	create = nullptr;
+}
+
 const CHAR *
 CExternalEngineUtils::SzCustomScanName()
 {

@@ -70,8 +70,10 @@ public:
 											 CExpression *pexprEnforcer,
 											 EExecEngine eeRequired) const = 0;
 
-	// cost of the engine operator or conversion exprhdl describes, excluding
-	// its children, which cost children
+	// Cost of the engine operator or conversion exprhdl describes, excluding
+	// its children, which cost children. Engine costs are relative to the
+	// GPDB cost model, the only one that calls this, so the engine can price
+	// its operators against CostPG and the model's parameters.
 	virtual DOUBLE CostLocal(const gpdbcost::CCostModelGPDB *model,
 							 CExpressionHandle &exprhdl,
 							 const ICostModel::SCostingInfo *pci,

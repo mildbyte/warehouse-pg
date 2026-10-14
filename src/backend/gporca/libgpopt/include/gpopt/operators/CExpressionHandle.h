@@ -189,7 +189,8 @@ public:
 	// required plan props of n-th child
 	CReqdPropPlan *Prpp(ULONG child_index) const;
 
-	// attached cost context, if any
+	// the cost context the handle is attached to, or null; while costing,
+	// a cost model reads the request it is costing under from it
 	CCostContext *
 	Pcc() const
 	{

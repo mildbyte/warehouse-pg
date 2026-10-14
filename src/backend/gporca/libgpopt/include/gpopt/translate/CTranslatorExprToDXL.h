@@ -302,6 +302,16 @@ private:
 						  CDistributionSpecArray *pdrgpdsBaseTables,
 						  ULONG *pulNonGatherMotions, BOOL *pfDML);
 
+	// An engine region is a subtree of engine operators under an
+	// EngineConvert(ToEngine=false), which the engine turns into a single
+	// CustomScan; its inputs are EngineConvert(ToEngine=true) over PG plans.
+	// With Ipc, the PG side of a conversion carries the region's batches as
+	// (segment, payload) rows, which is how engine data crosses the PG nodes
+	// that only move rows:
+	//   Motion:   Convert(to,ipc) (Motion (Convert(from,ipc) (region)))
+	//   Sequence: Convert(to,ipc) (Sequence (..., Convert(from,ipc) (region)))
+	//   CTE:      CTEProducer (Convert(from,ipc) (region)), and each consumer
+	//             is read through Convert(to,ipc) (CTEConsumer)
 	CDXLNode *PdxlnEngineConvert(CExpression *pexprConvert,
 								 CColRefArray *colref_array,
 								 CDistributionSpecArray *pdrgpdsBaseTables,

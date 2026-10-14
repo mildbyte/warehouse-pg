@@ -245,7 +245,8 @@ public:
 	}
 
 
-	// main driver for cost computation
+	// cost of the expression run by PG, which the external engine prices its
+	// operators against
 	CCost CostPG(CExpressionHandle &exprhdl, const SCostingInfo *pci) const;
 
 	// hash join cost as if the build side fit in memory
@@ -256,6 +257,8 @@ public:
 		return CostHashJoin(m_mp, exprhdl, this, pci, true);
 	}
 
+	// main driver for cost computation; engine operators and conversions are
+	// priced by the external engine
 	CCost Cost(CExpressionHandle &exprhdl,
 			   const SCostingInfo *pci) const override;
 

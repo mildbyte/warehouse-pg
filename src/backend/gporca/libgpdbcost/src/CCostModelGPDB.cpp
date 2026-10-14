@@ -2403,15 +2403,19 @@ CCostModelGPDB::Cost(
 {
 	GPOS_ASSERT(nullptr != pci);
 
-	if (COperator::EopPhysicalEngineConvert != exprhdl.Pop()->Eopid() &&
-		EeeExternal != CPhysical::PopConvert(exprhdl.Pop())->ExecEngine())
+	const BOOL fEngine =
+		COperator::EopPhysicalEngineConvert == exprhdl.Pop()->Eopid() ||
+		EeeExternal == CPhysical::PopConvert(exprhdl.Pop())->ExecEngine();
+	if (!fEngine)
 	{
 		return CostPG(exprhdl, pci);
 	}
+	// engine operators only come from the registered engine
+	const IExternalEngine *engine = CExternalEngineUtils::Pengine();
+	GPOS_RTL_ASSERT(nullptr != engine);
 
 	CCost children = CostChildren(m_mp, exprhdl, pci, m_cost_model_params);
-	return children + CCost(CExternalEngineUtils::Pengine()->CostLocal(
-						  this, exprhdl, pci, children));
+	return children + CCost(engine->CostLocal(this, exprhdl, pci, children));
 }
 
 CCost

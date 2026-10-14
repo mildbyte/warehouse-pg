@@ -317,7 +317,8 @@ CExternalEngineTest::EresUnittest_Register()
 	GPOS_UNITTEST_ASSERT(nullptr != engine);
 	engine->Release();
 
-	CExternalEngineUtils::Register(nullptr, nullptr, SzExternalEngineBuild());
+	CExternalEngineUtils::Unregister();
+	GPOS_UNITTEST_ASSERT(nullptr == CExternalEngineUtils::PengineCreate(mp));
 	return GPOS_OK;
 }
 

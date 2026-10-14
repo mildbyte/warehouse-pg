@@ -34,6 +34,9 @@ public:
 	static BOOL Register(const CHAR *custom_scan_name,
 						 PfnExternalEngineCreate create, const CHAR *build);
 
+	// forget the registered engine; optimizations already running keep theirs
+	static void Unregister();
+
 	// the registered engine's CustomScan name, or null
 	static const CHAR *SzCustomScanName();
 
