@@ -725,14 +725,14 @@ CTranslatorDXLToPlStmt::CollectEngineRegionInputs(
 		CDXLTranslateContext child_context(
 			m_mp, false, output_context->GetColIdToParamIdMap());
 		const CDXLNode *child = (*dxlnode)[EdxlengineconvertIndexChild];
-		Plan *leaf =
-			IsEngineIpc(dxlnode) && EdxlopPhysicalCTEConsumer ==
-										child->GetOperator()->GetDXLOperator()
-				? TranslateDXLCTEConsumerToSharedScan(
-					  child, &child_context, ctxt_translation_prev_siblings,
-					  true /*ipc*/)
-				: TranslateDXLOperatorToPlan(child, &child_context,
-											 ctxt_translation_prev_siblings);
+		Plan *leaf = TranslateDXLOperatorToPlan(child, &child_context,
+												ctxt_translation_prev_siblings);
+		// the consumer of an engine producer reads its (segment, payload) rows
+		if (IsEngineIpc(dxlnode) &&
+			EdxlopPhysicalCTEConsumer == child->GetOperator()->GetDXLOperator())
+		{
+			leaf->targetlist = EngineIpcTargetList(OUTER_VAR);
+		}
 		*leaves = gpdb::LAppend(*leaves, leaf);
 		return;
 	}
@@ -4327,7 +4327,7 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEProducerToSharedScan(
 Plan *
 CTranslatorDXLToPlStmt::TranslateDXLCTEConsumerToSharedScan(
 	const CDXLNode *cte_consumer_dxlnode, CDXLTranslateContext *output_context,
-	CDXLTranslationContextArray *ctxt_translation_prev_siblings, BOOL ipc)
+	CDXLTranslationContextArray *ctxt_translation_prev_siblings)
 {
 	CDXLPhysicalCTEConsumer *cte_consumer_dxlop =
 		CDXLPhysicalCTEConsumer::Cast(cte_consumer_dxlnode->GetOperator());
@@ -4348,11 +4348,10 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEConsumerToSharedScan(
 		cte_consumer_dxlop->GetOutputColIdsArray();
 #endif
 
-	// generate the target list of the CTE Consumer; the consumer of an
-	// Engine producer reads its (segment, payload) rows
-	plan->targetlist = ipc ? EngineIpcTargetList(OUTER_VAR) : NIL;
+	// generate the target list of the CTE Consumer
+	plan->targetlist = NIL;
 	CDXLNode *project_list_dxlnode = (*cte_consumer_dxlnode)[0];
-	const ULONG num_of_proj_list_elem = ipc ? 0 : project_list_dxlnode->Arity();
+	const ULONG num_of_proj_list_elem = project_list_dxlnode->Arity();
 	GPOS_ASSERT(num_of_proj_list_elem == output_colids_array->Size());
 	for (ULONG ul = 0; ul < num_of_proj_list_elem; ul++)
 	{

@@ -453,8 +453,9 @@ private:
 	Plan *TranslateDXLCTEConsumerToSharedScan(
 		const CDXLNode *cte_consumer_dxlnode,
 		CDXLTranslateContext *output_context,
-		CDXLTranslationContextArray *ctxt_translation_prev_siblings,
-		BOOL ipc = false);
+		CDXLTranslationContextArray *
+			ctxt_translation_prev_siblings	// translation contexts of previous siblings
+	);
 
 	// translate a (dynamic) bitmap table scan operator
 	Plan *TranslateDXLBitmapTblScan(
