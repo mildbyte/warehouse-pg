@@ -13,7 +13,6 @@
 
 #include "gpos/base.h"
 
-#include "gpopt/base/CExecEngine.h"
 #include "gpopt/operators/CLogicalSelect.h"
 #include "gpopt/operators/CPatternLeaf.h"
 #include "gpopt/operators/CPhysicalFilter.h"
@@ -97,15 +96,6 @@ CXformSelect2Filter::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 
 	// add alternative to results
 	pxfres->Add(pexprFilter);
-
-	if (CExternalEngineUtils::FEnabled(EeopFilter) &&
-		CExternalEngineUtils::FColsSupported(
-			pexprScalar->DeriveUsedColumns()) &&
-		CExternalEngineUtils::FScalarSupported(pexprScalar))
-	{
-		CExternalEngineUtils::AddAlternative(
-			mp, pxfres, GPOS_NEW(mp) CPhysicalFilter(mp), pexpr);
-	}
 }
 
 

@@ -112,27 +112,6 @@ CXformGbAgg2ScalarAgg::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 
 	// add alternative to transformation result
 	pxfres->Add(pexprAlt);
-
-	BOOL fDQA = nullptr != pdrgpcrArgDQA && 0 != pdrgpcrArgDQA->Size();
-	if (COperator::EgbaggtypeIntermediate != popAgg->Egbaggtype() &&
-		CExternalEngineUtils::FEnabled(EeopHashAgg) &&
-		CExternalEngineUtils::FLargeEnough(pexpr) &&
-		CExternalEngineUtils::FColsSupported(pexpr->DeriveOutputColumns()) &&
-		CExternalEngineUtils::FScalarSupported(pexprScalar))
-	{
-		colref_array->AddRef();
-		if (fDQA)
-		{
-			pdrgpcrArgDQA->AddRef();
-		}
-		CPhysicalScalarAgg *popEngine = GPOS_NEW(mp) CPhysicalScalarAgg(
-			mp, colref_array, popAgg->PdrgpcrMinimal(), popAgg->Egbaggtype(),
-			popAgg->FGeneratesDuplicates(), fDQA ? pdrgpcrArgDQA : nullptr,
-			CXformUtils::FMultiStageAgg(pexpr),
-			CXformUtils::FAggGenBySplitDQAXform(pexpr), popAgg->AggStage(),
-			!CXformUtils::FLocalAggCreatedByEagerAggXform(pexpr));
-		CExternalEngineUtils::AddAlternative(mp, pxfres, popEngine, pexpr);
-	}
 }
 
 

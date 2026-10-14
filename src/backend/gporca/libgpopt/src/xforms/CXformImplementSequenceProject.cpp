@@ -13,7 +13,6 @@
 
 #include "gpos/base.h"
 
-#include "gpopt/base/CExecEngine.h"
 #include "gpopt/operators/CLogicalSequenceProject.h"
 #include "gpopt/operators/CPatternLeaf.h"
 #include "gpopt/operators/CPhysicalSequenceProject.h"
@@ -87,20 +86,6 @@ CXformImplementSequenceProject::Transform(CXformContext *pxfctxt,
 
 	// add alternative to results
 	pxfres->Add(pexprSequenceProject);
-
-	if (CExternalEngineUtils::FWindowSupported(popLogicalSequenceProject) &&
-		CExternalEngineUtils::FScalarSupported(pexprScalar) &&
-		CExternalEngineUtils::FColsSupported(
-			(*pexpr)[1]->DeriveDefinedColumns()))
-	{
-		pds->AddRef();
-		pdrgpos->AddRef();
-		pdrgpwf->AddRef();
-		CExternalEngineUtils::AddAlternative(
-			mp, pxfres,
-			GPOS_NEW(mp) CPhysicalSequenceProject(mp, pds, pdrgpos, pdrgpwf),
-			pexpr);
-	}
 }
 
 

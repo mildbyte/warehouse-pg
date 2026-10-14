@@ -13,7 +13,6 @@
 
 #include "gpos/base.h"
 
-#include "gpopt/base/CExecEngine.h"
 #include "gpopt/operators/CLogicalProject.h"
 #include "gpopt/operators/CPatternLeaf.h"
 #include "gpopt/operators/CPhysicalComputeScalar.h"
@@ -77,17 +76,6 @@ CXformProject2ComputeScalar::Transform(CXformContext *pxfctxt,
 
 	// add alternative to results
 	pxfres->Add(pexprComputeScalar);
-
-	if (CExternalEngineUtils::FEnabled(EeopComputeScalar) &&
-		CExternalEngineUtils::FColsSupported(
-			pexprScalar->DeriveUsedColumns()) &&
-		CExternalEngineUtils::FColsSupported(
-			pexprScalar->DeriveDefinedColumns()) &&
-		CExternalEngineUtils::FScalarSupported(pexprScalar))
-	{
-		CExternalEngineUtils::AddAlternative(
-			mp, pxfres, GPOS_NEW(mp) CPhysicalComputeScalar(mp), pexpr);
-	}
 }
 
 

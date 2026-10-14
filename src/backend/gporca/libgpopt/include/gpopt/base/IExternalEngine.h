@@ -41,8 +41,8 @@ namespace gpopt
 using namespace gpos;
 
 class CColRefSet;
-class CLogicalSequenceProject;
 class COrderSpec;
+class CXform;
 class CXformResult;
 
 const CHAR *const EngineMotionSegidCol = "engine_segid";
@@ -52,39 +52,21 @@ class IExternalEngine : public CRefCount
 {
 public:
 	// bump on any change to this interface
-	static const ULONG AbiVersion = 3;
+	static const ULONG AbiVersion = 4;
 
 	~IExternalEngine() override = default;
 
-	// whether the engine implements this operator class at all
-	virtual BOOL FEnabled(EEngineOp op) const = 0;
-
-	virtual BOOL FHas(EEngineFeature feature) const = 0;
-
-	// joins/aggs whose inputs are all smaller than this get no engine twin
-	virtual DOUBLE MinRows() const = 0;
-
-	virtual BOOL FSupports(EEngineAsk ask, IMDId *mdid) const = 0;
-
-	// add pop over pexpr's children to the xform results, running in the
-	// engine; takes pop
-	virtual void AddAlternative(CMemoryPool *mp, CXformResult *pxfres,
-								CPhysical *pop, CExpression *pexpr) const = 0;
-
-	// whether some relational child is big enough to be worth an engine switch
-	virtual BOOL FLargeEnough(CExpression *pexpr) const = 0;
-
-	// whether every scalar node under the expression can run in the engine
-	virtual BOOL FScalarSupported(CExpression *pexprScalar) const = 0;
+	// add engine alternatives after pxform added results to pxfres from
+	// index ulFirst on for the binding pexpr
+	virtual void AddAlternatives(CMemoryPool *mp, const CXform *pxform,
+								 CExpression *pexpr, CXformResult *pxfres,
+								 ULONG ulFirst) const = 0;
 
 	// whether every column's type can cross the engine boundary
 	virtual BOOL FColsSupported(CColRefSet *pcrs) const = 0;
 
 	// whether a sort on the given keys can run in the engine
 	virtual BOOL FOrderSupported(COrderSpec *pos) const = 0;
-
-	// whether the engine can evaluate these window specs
-	virtual BOOL FWindowSupported(CLogicalSequenceProject *pop) const = 0;
 
 	// engine twin of a motion enforcer placed over the expression exprhdl
 	// describes, or null when the motion can't ship engine batches

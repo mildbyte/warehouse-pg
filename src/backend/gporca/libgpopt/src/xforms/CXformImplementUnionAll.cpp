@@ -13,7 +13,6 @@
 
 #include "gpos/base.h"
 
-#include "gpopt/base/CExecEngine.h"
 #include "gpopt/exception.h"
 #include "gpopt/operators/CLogicalUnionAll.h"
 #include "gpopt/operators/CPatternMultiLeaf.h"
@@ -81,14 +80,6 @@ CXformImplementUnionAll::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 
 	// add serial union alternative to results
 	pxfres->Add(pexprSerialUnionAll);
-
-	CColRefSet *pcrsOutput = pexpr->DeriveOutputColumns();
-	if (CExternalEngineUtils::FEnabled(EeopComputeScalar) &&
-		CExternalEngineUtils::FColsSupported(pcrsOutput))
-	{
-		CExternalEngineUtils::AddAlternative(
-			mp, pxfres, factory.PopPhysicalUnionAll(mp, false), pexpr);
-	}
 
 	// parallel union alternative to the result if the GUC is on
 	BOOL fParallel = GPOS_FTRACE(EopttraceEnableParallelAppend);

@@ -13,7 +13,6 @@
 
 #include "gpos/base.h"
 
-#include "gpopt/base/CExecEngine.h"
 #include "gpopt/operators/CExpressionHandle.h"
 #include "gpopt/operators/CLogicalLimit.h"
 #include "gpopt/operators/CPatternLeaf.h"
@@ -99,22 +98,6 @@ CXformImplementLimit::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 
 	// add alternative to results
 	pxfres->Add(pexprLimit);
-
-	if (CExternalEngineUtils::FEnabled(EeopSort) &&
-		((COperator::EopScalarConst == pexprScalarStart->Pop()->Eopid() &&
-		  COperator::EopScalarConst == pexprScalarRows->Pop()->Eopid()) ||
-		 (CExternalEngineUtils::FHas(EefExprLimit) &&
-		  CExternalEngineUtils::FScalarSupported(pexprScalarStart) &&
-		  CExternalEngineUtils::FScalarSupported(pexprScalarRows))))
-	{
-		pos->AddRef();
-		CExternalEngineUtils::AddAlternative(
-			mp, pxfres,
-			GPOS_NEW(mp) CPhysicalLimit(mp, pos, popLimit->FGlobal(),
-										popLimit->FHasCount(),
-										popLimit->IsTopLimitUnderDMLorCTAS()),
-			pexpr);
-	}
 }
 
 

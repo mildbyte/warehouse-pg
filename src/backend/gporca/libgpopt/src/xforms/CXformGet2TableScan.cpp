@@ -104,19 +104,6 @@ CXformGet2TableScan::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 		GPOS_NEW(mp) CPhysicalTableScan(mp, pname, ptabdesc, pdrgpcrOutput));
 	// add alternative to transformation result
 	pxfres->Add(pexprAlt);
-
-	if (CExternalEngineUtils::FEnabled(EeopScan) &&
-		CExternalEngineUtils::FSupports(EeaskRelation, ptabdesc->MDId()))
-	{
-		ptabdesc->AddRef();
-		pdrgpcrOutput->AddRef();
-		CExternalEngineUtils::AddAlternative(
-			mp, pxfres,
-			GPOS_NEW(mp)
-				CPhysicalTableScan(mp, GPOS_NEW(mp) CName(mp, popGet->Name()),
-								   ptabdesc, pdrgpcrOutput),
-			pexpr);
-	}
 }
 
 

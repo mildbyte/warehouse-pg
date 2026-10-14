@@ -15,7 +15,6 @@
 
 #include "gpopt/base/CCastUtils.h"
 #include "gpopt/base/CColRef.h"
-#include "gpopt/base/CExecEngine.h"
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/base/CUtils.h"
 #include "gpopt/hints/CHintUtils.h"
@@ -613,28 +612,6 @@ CXformUtils::TransformImplementBinaryOp(CXformContext *pxfctxt,
 				COperator::EopPhysicalLeftAntiSemiNLJoin == op_id ||
 				COperator::EopPhysicalLeftAntiSemiNLJoinNotIn == op_id);
 
-	// Engine twin. A join with a hash-joinable conjunct also gets an engine
-	// hash join, which always beats an engine NLJ; the NLJ twin would only
-	// grow the search (Q02 planning time 4x).
-	COperator::EOperatorId eopidNL = pexprBinary->Pop()->Eopid();
-	CExpression *pexprScalarTree =
-		CExternalEngineUtils::PexprScalarTree(pexprScalar);
-	if ((COperator::EopPhysicalLeftAntiSemiNLJoinNotIn != eopidNL ||
-		 CExternalEngineUtils::FHas(EefNotInNLJoin)) &&
-		nullptr != pexprScalarTree &&
-		(!CUtils::HasOuterRefs(pexprRight) ||
-		 CExternalEngineUtils::FHas(EefCorrelatedJoin)) &&
-		CExternalEngineUtils::FEnabled(EeopHashJoin) &&
-		!CExternalEngineUtils::FHashJoinable(mp, pexpr, pexprScalarTree) &&
-		CExternalEngineUtils::FLargeEnough(pexpr) &&
-		CExternalEngineUtils::FColsSupported(
-			pexprScalar->DeriveUsedColumns()) &&
-		CExternalEngineUtils::FScalarSupported(pexprScalarTree))
-	{
-		CExternalEngineUtils::AddAlternative(mp, pxfres, GPOS_NEW(mp) T(mp),
-											 pexpr);
-	}
-
 	if (!CHintUtils::SatisfiesJoinTypeHints(
 			mp, pexprBinary,
 			COptCtxt::PoctxtFromTLS()->GetOptimizerConfig()->GetPlanHint()))
@@ -669,29 +646,6 @@ CXformUtils::AddHashOrMergeJoinAlternative(
 	T *op =
 		GPOS_NEW(mp) T(mp, pdrgpexprOuter, pdrgpexprInner, opfamilies,
 					   is_hash_join_null_aware, popLogicalJoin->OriginXform());
-
-	// Engine twin for every hash join type. The key arrays are shared, so
-	// take references before the PG alternative may be released below.
-	BOOL fEngine =
-		CUtils::FHashJoin(op) &&
-		(COperator::EopPhysicalLeftAntiSemiHashJoinNotIn != op->Eopid() ||
-		 1 == pdrgpexprOuter->Size() ||
-		 CExternalEngineUtils::FHas(EefMultiKeyNotIn)) &&
-		CExternalEngineUtils::FEnabled(EeopHashJoin) &&
-		CExternalEngineUtils::FLargeEnough(pexprJoin) &&
-		CExternalEngineUtils::FColsSupported(
-			(*pexprJoin)[2]->DeriveUsedColumns()) &&
-		CExternalEngineUtils::FScalarSupported((*pexprJoin)[2]);
-	if (fEngine)
-	{
-		pdrgpexprOuter->AddRef();
-		pdrgpexprInner->AddRef();
-		if (nullptr != opfamilies)
-		{
-			opfamilies->AddRef();
-		}
-	}
-
 	CExpression *pexprResult = GPOS_NEW(mp)
 		CExpression(mp, op, (*pexprJoin)[0], (*pexprJoin)[1], (*pexprJoin)[2]);
 	if (!CHintUtils::SatisfiesJoinTypeHints(
@@ -703,16 +657,6 @@ CXformUtils::AddHashOrMergeJoinAlternative(
 	else
 	{
 		pxfres->Add(pexprResult);
-	}
-
-	if (fEngine)
-	{
-		CExternalEngineUtils::AddAlternative(
-			mp, pxfres,
-			GPOS_NEW(mp)
-				T(mp, pdrgpexprOuter, pdrgpexprInner, opfamilies,
-				  is_hash_join_null_aware, popLogicalJoin->OriginXform()),
-			pexprJoin);
 	}
 }
 

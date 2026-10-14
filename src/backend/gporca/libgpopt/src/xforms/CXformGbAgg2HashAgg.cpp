@@ -13,7 +13,6 @@
 
 #include "gpos/base.h"
 
-#include "gpopt/base/CExecEngine.h"
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/operators/CLogicalGbAgg.h"
 #include "gpopt/operators/CPatternLeaf.h"
@@ -83,41 +82,6 @@ CXformGbAgg2HashAgg::Exfp(CExpressionHandle &exprhdl) const
 	return CXform::ExfpHigh;
 }
 
-// The engine's hash aggregate also evaluates the aggregates FApplicable
-// rules out for PG, such as DISTINCT ones.
-static void
-AddEngineHashAgg(CMemoryPool *mp, CXformResult *pxfres, CExpression *pexpr)
-{
-	CLogicalGbAgg *popAgg = CLogicalGbAgg::PopConvert(pexpr->Pop());
-	if (COperator::EgbaggtypeIntermediate == popAgg->Egbaggtype() ||
-		!CExternalEngineUtils::FEnabled(EeopHashAgg) ||
-		!CExternalEngineUtils::FLargeEnough(pexpr) ||
-		!CExternalEngineUtils::FColsSupported(pexpr->DeriveOutputColumns()) ||
-		!CExternalEngineUtils::FScalarSupported((*pexpr)[1]))
-	{
-		return;
-	}
-	CColRefArray *pdrgpcrArgDQA = popAgg->PdrgpcrArgDQA();
-	if (nullptr != pdrgpcrArgDQA && 0 == pdrgpcrArgDQA->Size())
-	{
-		pdrgpcrArgDQA = nullptr;
-	}
-	if (nullptr != pdrgpcrArgDQA)
-	{
-		pdrgpcrArgDQA->AddRef();
-	}
-	popAgg->Pdrgpcr()->AddRef();
-	CExternalEngineUtils::AddAlternative(
-		mp, pxfres,
-		GPOS_NEW(mp) CPhysicalHashAgg(
-			mp, popAgg->Pdrgpcr(), popAgg->PdrgpcrMinimal(),
-			popAgg->Egbaggtype(), popAgg->FGeneratesDuplicates(), pdrgpcrArgDQA,
-			CXformUtils::FMultiStageAgg(pexpr),
-			CXformUtils::FAggGenBySplitDQAXform(pexpr), popAgg->AggStage(),
-			!CXformUtils::FLocalAggCreatedByEagerAggXform(pexpr)),
-		pexpr);
-}
-
 //---------------------------------------------------------------------------
 //	@function:
 //		CXformGbAgg2HashAgg::Transform
@@ -140,7 +104,6 @@ CXformGbAgg2HashAgg::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	// evaluating these conditions needs a deep tree in the project list
 	if (!FApplicable(pexpr))
 	{
-		AddEngineHashAgg(pxfctxt->Pmp(), pxfres, pexpr);
 		return;
 	}
 
@@ -177,8 +140,6 @@ CXformGbAgg2HashAgg::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 
 	// add alternative to transformation result
 	pxfres->Add(pexprAlt);
-
-	AddEngineHashAgg(mp, pxfres, pexpr);
 }
 
 //---------------------------------------------------------------------------

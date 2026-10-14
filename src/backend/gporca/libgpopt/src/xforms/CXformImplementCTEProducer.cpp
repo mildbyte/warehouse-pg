@@ -13,7 +13,6 @@
 
 #include "gpos/base.h"
 
-#include "gpopt/base/CExecEngine.h"
 #include "gpopt/operators/CLogicalCTEProducer.h"
 #include "gpopt/operators/CPatternLeaf.h"
 #include "gpopt/operators/CPhysicalCTEProducer.h"
@@ -92,17 +91,6 @@ CXformImplementCTEProducer::Transform(CXformContext *pxfctxt,
 
 	// add alternative to transformation result
 	pxfres->Add(pexprAlt);
-
-	CColRefSet *pcrs = GPOS_NEW(mp) CColRefSet(mp, colref_array);
-	if (CExternalEngineUtils::FEnabled(EeopMotion) &&
-		CExternalEngineUtils::FColsSupported(pcrs))
-	{
-		colref_array->AddRef();
-		CExternalEngineUtils::AddAlternative(
-			mp, pxfres, GPOS_NEW(mp) CPhysicalCTEProducer(mp, id, colref_array),
-			pexpr);
-	}
-	pcrs->Release();
 }
 
 // EOF
