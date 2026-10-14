@@ -280,10 +280,14 @@ CPhysicalSort::PdsDerive(CMemoryPool *,	 // mp
 //
 //---------------------------------------------------------------------------
 CRewindabilitySpec *
-CPhysicalSort::PrsDerive(CMemoryPool *mp,
-						 CExpressionHandle &  // exprhdl
-) const
+CPhysicalSort::PrsDerive(CMemoryPool *mp, CExpressionHandle &exprhdl) const
 {
+	// an engine region re-runs its whole subtree on rescan
+	if (EeeExternal == ExecEngine())
+	{
+		return PrsDerivePassThruOuter(mp, exprhdl);
+	}
+
 	// rewindability of output is always true
 	return GPOS_NEW(mp) CRewindabilitySpec(CRewindabilitySpec::ErtMarkRestore,
 										   CRewindabilitySpec::EmhtNoMotion);
