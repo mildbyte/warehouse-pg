@@ -7,7 +7,7 @@
 #include "gpopt/base/CCastUtils.h"
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/base/CUtils.h"
-#include "gpopt/base/IEngineRules.h"
+#include "gpopt/base/IExternalEngine.h"
 #include "gpopt/operators/CPhysicalJoin.h"
 #include "gpopt/optimizer/COptimizerConfig.h"
 #include "gpopt/search/CGroup.h"
@@ -82,68 +82,82 @@ CExternalEngineUtils::FHashJoinable(CMemoryPool *mp, CExpression *pexprJoin,
 
 namespace
 {
-const IEngineRules *rules = nullptr;
-}
+const CHAR *custom_scan_name = nullptr;
+PfnExternalEngineCreate create = nullptr;
+}  // namespace
 
 BOOL
-CExternalEngineUtils::SetRules(const IEngineRules *r, ULONG abi_version,
-							   ULONG layout)
+CExternalEngineUtils::Register(const CHAR *name, PfnExternalEngineCreate pfn,
+							   ULONG abi_version, ULONG layout)
 {
-	if (IEngineRules::AbiVersion != abi_version ||
-		UlEngineRulesLayout() != layout)
+	if (IExternalEngine::AbiVersion != abi_version ||
+		UlExternalEngineLayout() != layout)
 	{
 		return false;
 	}
-	rules = r;
+	custom_scan_name = name;
+	create = pfn;
 	return true;
 }
 
-const IEngineRules *
-CExternalEngineUtils::Prules()
+const CHAR *
+CExternalEngineUtils::SzCustomScanName()
 {
-	return rules;
+	return custom_scan_name;
+}
+
+IExternalEngine *
+CExternalEngineUtils::PengineCreate(CMemoryPool *mp)
+{
+	return nullptr != create ? create(mp) : nullptr;
 }
 
 void
 CExternalEngineUtils::AddAlternative(CMemoryPool *mp, CXformResult *pxfres,
 									 CPhysical *pop, CExpression *pexpr)
 {
-	if (nullptr == rules)
+	const IExternalEngine *engine = Pengine();
+	if (nullptr == engine)
 	{
 		pop->Release();
 		return;
 	}
-	rules->AddAlternative(mp, pxfres, pop, pexpr);
+	engine->AddAlternative(mp, pxfres, pop, pexpr);
 }
 
 BOOL
 CExternalEngineUtils::FLargeEnough(CExpression *pexpr)
 {
-	return nullptr != rules && rules->FLargeEnough(pexpr);
+	const IExternalEngine *engine = Pengine();
+	return nullptr != engine && engine->FLargeEnough(pexpr);
 }
 
 BOOL
 CExternalEngineUtils::FScalarSupported(CExpression *pexprScalar)
 {
-	return nullptr != rules && rules->FScalarSupported(pexprScalar);
+	const IExternalEngine *engine = Pengine();
+	return nullptr != engine && engine->FScalarSupported(pexprScalar);
 }
 
 BOOL
 CExternalEngineUtils::FColsSupported(CColRefSet *pcrs)
 {
-	return nullptr != rules && rules->FColsSupported(pcrs);
+	const IExternalEngine *engine = Pengine();
+	return nullptr != engine && engine->FColsSupported(pcrs);
 }
 
 BOOL
 CExternalEngineUtils::FOrderSupported(COrderSpec *pos)
 {
-	return nullptr != rules && rules->FOrderSupported(pos);
+	const IExternalEngine *engine = Pengine();
+	return nullptr != engine && engine->FOrderSupported(pos);
 }
 
 BOOL
 CExternalEngineUtils::FWindowSupported(CLogicalSequenceProject *pop)
 {
-	return nullptr != rules && rules->FWindowSupported(pop);
+	const IExternalEngine *engine = Pengine();
+	return nullptr != engine && engine->FWindowSupported(pop);
 }
 
 CExpression *
@@ -151,6 +165,8 @@ CExternalEngineUtils::PexprEngineMotion(CMemoryPool *mp,
 										CExpressionHandle &exprhdl,
 										CExpression *pexprMotion)
 {
-	return nullptr != rules ? rules->PexprEngineMotion(mp, exprhdl, pexprMotion)
-							: nullptr;
+	const IExternalEngine *engine = Pengine();
+	return nullptr != engine
+			   ? engine->PexprEngineMotion(mp, exprhdl, pexprMotion)
+			   : nullptr;
 }

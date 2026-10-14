@@ -11,11 +11,63 @@
 
 #include "gpos/base.h"
 
-#include "gpopt/base/IExternalEngine.h"
+namespace gpmd
+{
+class IMDId;
+}
 
 namespace gpopt
 {
 using namespace gpos;
+using namespace gpmd;
+
+// operator classes the engine may implement
+enum EEngineOp
+{
+	EeopToEngine = 0,  // conversion from PG tuples
+	EeopToPG,		   // conversion back to PG tuples
+	EeopHashAgg,
+	EeopHashJoin,
+	EeopComputeScalar,
+	EeopFilter,
+	EeopSort,
+	EeopMotion,	 // motion shipping engine batches
+	EeopWindow,
+	EeopScan,
+
+	EeopSentinel
+};
+
+// what a capability question is about; the asked-about object is an mdid
+enum EEngineAsk
+{
+	EeaskType = 0,	// values of this type can cross the boundary
+	EeaskOperator,
+	EeaskFunction,
+	EeaskAgg,		  // single-stage aggregate
+	EeaskAggSplit,	  // aggregate whose partial state is a plain value
+	EeaskMotionKey,	  // type the engine hashes exactly like cdbhash
+	EeaskWindowFunc,  // window-only function
+	EeaskRelation,	  // table the engine scans itself
+
+	EeaskSentinel
+};
+
+// abilities beyond the baseline every engine is assumed to have
+enum EEngineFeature
+{
+	EefCorrelatedJoin = 0,	// outer references (correlated NL joins, subplans)
+	EefNotInNLJoin,			// NL join with NOT IN semantics
+	EefMultiKeyNotIn,		// null-aware anti hash join on several keys
+	EefExprLimit,			// LIMIT/OFFSET that are not constants
+	EefWindowMixedOrder,  // one node's window specs not all prefixes of the first
+	EefWindowRangeOffset,  // RANGE/GROUPS frame offsets
+	EefWindowExprOffset,   // ROWS frame offsets that are not constants
+	EefWindowExclusion,	   // frame exclusion
+	EefArrayExpr,		   // x op ANY/ALL over a non-literal array
+
+	EefSentinel
+};
 
 class CExpression;
 class CColRefSet;
@@ -65,21 +117,29 @@ SzExecEngine(EExecEngine ee)
 
 class COrderSpec;
 class CExpressionHandle;
-class IEngineRules;
 class CLogicalSequenceProject;
 class CPhysical;
 class CXformResult;
+class IExternalEngine;
+
+// creates the engine for one optimization, or null when it is disabled
+typedef IExternalEngine *(*PfnExternalEngineCreate)(CMemoryPool *mp);
 
 class CExternalEngineUtils
 {
 public:
-	// install the engine's placement rules; false when they were built
-	// against an incompatible Orca
-	static BOOL SetRules(const IEngineRules *rules, ULONG abi_version,
+	// Register the engine whose regions are CustomScans with the methods
+	// registered as custom_scan_name; false when the engine was built
+	// against an incompatible Orca (see IExternalEngine::AbiVersion).
+	static BOOL Register(const CHAR *custom_scan_name,
+						 PfnExternalEngineCreate create, ULONG abi_version,
 						 ULONG layout);
 
-	// the registered rules, or null
-	static const IEngineRules *Prules();
+	// the registered engine's CustomScan name, or null
+	static const CHAR *SzCustomScanName();
+
+	// the engine for a new optimization, or null
+	static IExternalEngine *PengineCreate(CMemoryPool *mp);
 
 	// the optimization's external engine, or null
 	static const IExternalEngine *Pengine();

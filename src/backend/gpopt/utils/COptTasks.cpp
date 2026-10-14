@@ -34,6 +34,7 @@ extern "C" {
 
 #include "gpdbcost/CCostModelGPDB.h"
 #include "gpopt/base/CAutoOptCtxt.h"
+#include "gpopt/base/CExecEngine.h"
 #include "gpopt/config/CConfigParamMapping.h"
 #include "gpopt/engine/CCTEConfig.h"
 #include "gpopt/engine/CEnumeratorConfig.h"
@@ -57,7 +58,6 @@ extern "C" {
 #include "gpopt/translate/CTranslatorRelcacheToDXL.h"
 #include "gpopt/translate/CTranslatorUtils.h"
 #include "gpopt/utils/CConstExprEvaluatorProxy.h"
-#include "gpopt/utils/CExternalEngineProxy.h"
 #include "gpopt/utils/gpdbdefs.h"
 #include "gpopt/xforms/CXformFactory.h"
 #include "naucrates/base/CQueryToDXLResult.h"
@@ -90,7 +90,6 @@ using namespace gpdbcost;
 const CSystemId default_sysid(IMDId::EmdidGeneral, GPOS_WSZ_STR_LENGTH("GPDB"));
 
 plan_hint_hook_type plan_hint_hook = nullptr;
-const OrcaExternalEngine *orca_external_engine = nullptr;
 
 // Check one-to-one mapping of row hint types
 GPOS_CPL_ASSERT(CRowHint::RVT_ABSOLUTE ==
@@ -933,7 +932,7 @@ COptTasks::OptimizeTask(void *ptr)
 			CPlanHint *plan_hints = GetPlanHints(mp, opt_ctxt->m_query);
 			COptimizerConfig *optimizer_config =
 				CreateOptimizerConfig(mp, cost_model, plan_hints,
-									  CExternalEngineProxy::PengineCreate(mp));
+									  CExternalEngineUtils::PengineCreate(mp));
 			CConstExprEvaluatorProxy expr_eval_proxy(mp, &mda);
 			IConstExprEvaluator *expr_evaluator =
 				GPOS_NEW(mp) CConstExprEvaluatorDXL(mp, &mda, &expr_eval_proxy);

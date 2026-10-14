@@ -42,7 +42,6 @@ extern "C" {
 #include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
 #include "optimizer/optimizer.h"
-#include "optimizer/orca.h"
 #include "optimizer/plancat.h"
 #include "optimizer/subselect.h"
 #include "parser/parse_agg.h"
@@ -2771,39 +2770,6 @@ gpdb::TestexprIsHashable(Node *testexpr, List *param_ids)
 	}
 	GP_WRAP_END;
 	return false;
-}
-
-bool
-gpdb::ExternalEngineSupports(int ask, Oid oid)
-{
-	GP_WRAP_START;
-	{
-		return orca_external_engine->supports((OrcaEngineAsk) ask, oid);
-	}
-	GP_WRAP_END;
-	return false;
-}
-
-void
-gpdb::ExternalEngineConfigure(::OrcaEngineConfig *config)
-{
-	GP_WRAP_START;
-	{
-		orca_external_engine->configure(config);
-		return;
-	}
-	GP_WRAP_END;
-}
-
-double
-gpdb::ExternalEngineCost(const ::OrcaEngineCostInput *input)
-{
-	GP_WRAP_START;
-	{
-		return orca_external_engine->cost(input);
-	}
-	GP_WRAP_END;
-	return 0;
 }
 
 const struct CustomScanMethods *

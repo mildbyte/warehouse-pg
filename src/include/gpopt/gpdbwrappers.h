@@ -38,8 +38,6 @@ using Relation = struct RelationData *;
 struct Value;
 using TupleDesc = struct TupleDescData *;
 struct Query;
-struct OrcaEngineConfig;
-struct OrcaEngineCostInput;
 using ScanKey = struct ScanKeyData *;
 struct Bitmapset;
 struct Plan;
@@ -680,11 +678,6 @@ PartitionDesc GPDBRelationRetrievePartitionDesc(Relation rel);
 PartitionKey GPDBRelationRetrievePartitionKey(Relation rel);
 
 bool TestexprIsHashable(Node *testexpr, List *param_ids);
-
-// calls into orca_external_engine; ask is an OrcaEngineAsk
-void ExternalEngineConfigure(::OrcaEngineConfig *config);
-bool ExternalEngineSupports(int ask, Oid oid);
-double ExternalEngineCost(const ::OrcaEngineCostInput *input);
 
 const struct CustomScanMethods *GetCustomScanMethods(const char *name,
 													 bool missing_ok);

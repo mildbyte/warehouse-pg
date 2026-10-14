@@ -18,7 +18,7 @@
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/base/COrderSpec.h"
 #include "gpopt/base/CWindowFrame.h"
-#include "gpopt/base/IEngineRules.h"
+#include "gpopt/base/IExternalEngine.h"
 #include "gpopt/engine/CHint.h"
 #include "gpopt/metadata/CIndexDescriptor.h"
 #include "gpopt/metadata/CTableDescriptor.h"
@@ -2410,7 +2410,7 @@ CCostModelGPDB::Cost(
 	}
 
 	CCost children = CostChildren(m_mp, exprhdl, pci, m_cost_model_params);
-	return children + CCost(CExternalEngineUtils::Prules()->CostLocal(
+	return children + CCost(CExternalEngineUtils::Pengine()->CostLocal(
 						  this, exprhdl, pci, children));
 }
 

@@ -15,6 +15,7 @@
 #include "gpos/common/CBitSetIter.h"
 #include "gpos/string/CWStringDynamic.h"
 
+#include "gpopt/base/IExternalEngine.h"
 #include "gpopt/cost/ICostModel.h"
 #include "naucrates/dxl/CCostModelConfigSerializer.h"
 #include "naucrates/dxl/xml/CXMLSerializer.h"

@@ -27,7 +27,6 @@ extern "C" {
 #include "nodes/nodes.h"
 #include "nodes/plannodes.h"
 #include "nodes/primnodes.h"
-#include "optimizer/orca.h"
 #include "partitioning/partdesc.h"
 #include "storage/lmgr.h"
 #include "utils/guc.h"
@@ -50,6 +49,7 @@ extern "C" {
 #include "gpos/io/COstreamString.h"
 
 #include "gpopt/base/CUtils.h"
+#include "gpopt/base/IExternalEngine.h"
 #include "gpopt/gpdbwrappers.h"
 #include "gpopt/mdcache/CMDAccessor.h"
 #include "gpopt/translate/CIndexQualInfo.h"
@@ -570,7 +570,7 @@ CTranslatorDXLToPlStmt::TranslateDXLEngineRegion(
 	}
 
 	const CustomScanMethods *methods = gpdb::GetCustomScanMethods(
-		orca_external_engine->custom_scan_name, true);
+		CExternalEngineUtils::SzCustomScanName(), true);
 	if (nullptr == methods)
 	{
 		GPOS_RAISE(
@@ -667,7 +667,7 @@ CTranslatorDXLToPlStmt::TranslateDXLEngineRegion(
 // An engine motion moves the (segment, payload) rows of the region below it.
 // Redistribution becomes an explicit motion on the segment column, which the
 // region computes from the route appended to its custom_private (see
-// optimizer/orca.h).
+// IExternalEngine.h).
 void
 CTranslatorDXLToPlStmt::TranslateDXLEngineMotion(const CDXLNode *motion_dxlnode,
 												 const CDXLNode *region_dxlnode,
@@ -784,8 +784,7 @@ List *
 CTranslatorDXLToPlStmt::EngineIpcTargetList(Index varno)
 {
 	const Oid types[] = {INT4OID, BYTEAOID};
-	const char *names[] = {ORCA_ENGINE_MOTION_SEGID_COL,
-						   ORCA_ENGINE_MOTION_PAYLOAD_COL};
+	const char *names[] = {EngineMotionSegidCol, EngineMotionPayloadCol};
 	List *target_list = NIL;
 	for (ULONG ul = 0; ul < 2; ul++)
 	{

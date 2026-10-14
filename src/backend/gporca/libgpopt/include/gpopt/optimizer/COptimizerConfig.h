@@ -17,7 +17,6 @@
 #include "gpos/common/CRefCount.h"
 
 #include "gpopt/base/CWindowOids.h"
-#include "gpopt/base/IExternalEngine.h"
 #include "gpopt/engine/CCTEConfig.h"
 #include "gpopt/engine/CEnumeratorConfig.h"
 #include "gpopt/engine/CHint.h"
@@ -30,6 +29,7 @@ using namespace gpos;
 
 // forward decl
 class ICostModel;
+class IExternalEngine;
 
 //---------------------------------------------------------------------------
 //	@class:
