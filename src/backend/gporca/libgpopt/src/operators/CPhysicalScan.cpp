@@ -61,6 +61,14 @@ CPhysicalScan::CPhysicalScan(CMemoryPool *mp, const CName *pnameAlias,
 }
 
 
+void
+CPhysicalScan::SetDistributionSpec(CDistributionSpec *pds)
+{
+	GPOS_ASSERT(nullptr != pds);
+	m_pds->Release();
+	m_pds = pds;
+}
+
 //---------------------------------------------------------------------------
 //	@function:
 //		CPhysicalScan::~CPhysicalScan

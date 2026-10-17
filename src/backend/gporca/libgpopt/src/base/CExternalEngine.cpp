@@ -24,11 +24,13 @@ namespace
 {
 const CHAR *custom_scan_name = nullptr;
 PfnExternalEngineCreate create = nullptr;
+PfnExternalEngineRelation relation = nullptr;
 }  // namespace
 
 BOOL
 CExternalEngineUtils::Register(const CHAR *name, PfnExternalEngineCreate pfn,
-							   const CHAR *build)
+							   const CHAR *build,
+							   PfnExternalEngineRelation pfnRelation)
 {
 	if (0 != clib::Strcmp(SzExternalEngineBuild(), build))
 	{
@@ -36,6 +38,7 @@ CExternalEngineUtils::Register(const CHAR *name, PfnExternalEngineCreate pfn,
 	}
 	custom_scan_name = name;
 	create = pfn;
+	relation = pfnRelation;
 	return true;
 }
 
@@ -44,6 +47,13 @@ CExternalEngineUtils::Unregister()
 {
 	custom_scan_name = nullptr;
 	create = nullptr;
+	relation = nullptr;
+}
+
+EExternalEngineRelation
+CExternalEngineUtils::EeerRelation(ULONG rel_oid)
+{
+	return nullptr != relation ? relation(rel_oid) : EeerNone;
 }
 
 const CHAR *

@@ -308,11 +308,11 @@ CExternalEngineTest::EresUnittest_Register()
 	CMemoryPool *mp = amp.Pmp();
 
 	GPOS_UNITTEST_ASSERT(!CExternalEngineUtils::Register(
-		"test", PengineTestCreate, "4 another Orca"));
+		"test", PengineTestCreate, "4 another Orca", nullptr));
 	GPOS_UNITTEST_ASSERT(nullptr == CExternalEngineUtils::PengineCreate(mp));
 
 	GPOS_UNITTEST_ASSERT(CExternalEngineUtils::Register(
-		"test", PengineTestCreate, SzExternalEngineBuild()));
+		"test", PengineTestCreate, SzExternalEngineBuild(), nullptr));
 	IExternalEngine *engine = CExternalEngineUtils::PengineCreate(mp);
 	GPOS_UNITTEST_ASSERT(nullptr != engine);
 	engine->Release();

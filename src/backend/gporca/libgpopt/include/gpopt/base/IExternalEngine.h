@@ -81,7 +81,7 @@ public:
 };
 
 // bump on any change to IExternalEngine or CExternalEngineUtils
-#define GPOPT_EXTERNAL_ENGINE_VERSION "6"
+#define GPOPT_EXTERNAL_ENGINE_VERSION "7"
 
 // gpos/base.h includes pg_config.h, except in standalone Orca builds
 #ifdef PG_VERSION_STR

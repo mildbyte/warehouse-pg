@@ -43,6 +43,7 @@ extern "C" {
 #include "gpos/error/CException.h"
 #include "gpos/io/COstreamString.h"
 
+#include "gpopt/base/CExternalEngine.h"
 #include "gpopt/base/CUtils.h"
 #include "gpopt/gpdbwrappers.h"
 #include "gpopt/mdcache/CMDAccessor.h"
@@ -2618,6 +2619,15 @@ CTranslatorRelcacheToDXL::RetrieveRelStorageType(Relation rel)
 			}
 			break;
 		default:
+			// A table the external engine stores itself: only its scans
+			// matter to Orca, and PG reads it on the coordinator like a heap
+			// (CTranslatorUtils::GetTableDescr decides whether Orca plans it)
+			if (EeerNone !=
+				CExternalEngineUtils::EeerRelation(RelationGetRelid(rel)))
+			{
+				rel_storage_type = IMDRelation::ErelstorageHeap;
+				break;
+			}
 			GPOS_RAISE(gpdxl::ExmaMD, gpdxl::ExmiMDObjUnsupported,
 					   GPOS_WSZ_LIT("Unsupported table AM"));
 	}

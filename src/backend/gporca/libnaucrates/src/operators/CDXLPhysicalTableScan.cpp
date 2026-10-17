@@ -139,6 +139,13 @@ CDXLPhysicalTableScan::SerializeToDXL(CXMLSerializer *xml_serializer,
 	xml_serializer->OpenElement(
 		CDXLTokens::GetDXLTokenStr(EdxltokenNamespacePrefix), element_name);
 
+	if (IMDRelation::EreldistrSentinel != m_engine_distribution)
+	{
+		xml_serializer->AddAttribute(
+			CDXLTokens::GetDXLTokenStr(EdxltokenRelDistrPolicy),
+			IMDRelation::GetDistrPolicyStr(m_engine_distribution));
+	}
+
 	// serialize properties
 	dxlnode->SerializePropertiesToDXL(xml_serializer);
 

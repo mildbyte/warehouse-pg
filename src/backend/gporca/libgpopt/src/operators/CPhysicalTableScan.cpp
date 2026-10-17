@@ -54,6 +54,7 @@ CPhysicalTableScan::HashValue() const
 									   m_ptabdesc->MDId()->HashValue());
 	ulHash =
 		gpos::CombineHashes(ulHash, CUtils::UlHashColArray(m_pdrgpcrOutput));
+	ulHash = gpos::CombineHashes(ulHash, m_pds->HashValue());
 
 	return ulHash;
 }
@@ -77,7 +78,8 @@ CPhysicalTableScan::Matches(COperator *pop) const
 
 	CPhysicalTableScan *popTableScan = CPhysicalTableScan::PopConvert(pop);
 	return m_ptabdesc->MDId()->Equals(popTableScan->Ptabdesc()->MDId()) &&
-		   m_pdrgpcrOutput->Equals(popTableScan->PdrgpcrOutput());
+		   m_pdrgpcrOutput->Equals(popTableScan->PdrgpcrOutput()) &&
+		   m_pds->Matches(popTableScan->Pds());
 }
 
 

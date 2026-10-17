@@ -25,6 +25,16 @@ class IExternalEngine;
 // creates the engine for one optimization, or null when it is disabled
 typedef IExternalEngine *(*PfnExternalEngineCreate)(CMemoryPool *mp);
 
+// whether the engine stores a relation itself (a table AM PG can't scan in
+// parallel), and if so whether engine plans are on
+enum EExternalEngineRelation
+{
+	EeerNone = 0,
+	EeerDisabled,
+	EeerEnabled
+};
+typedef EExternalEngineRelation (*PfnExternalEngineRelation)(ULONG rel_oid);
+
 class CExternalEngineUtils
 {
 public:
@@ -32,7 +42,8 @@ public:
 	// registered as custom_scan_name; false when the engine was built
 	// against another Orca (see SzExternalEngineBuild).
 	static BOOL Register(const CHAR *custom_scan_name,
-						 PfnExternalEngineCreate create, const CHAR *build);
+						 PfnExternalEngineCreate create, const CHAR *build,
+						 PfnExternalEngineRelation relation);
 
 	// forget the registered engine; optimizations already running keep theirs
 	static void Unregister();
@@ -45,6 +56,10 @@ public:
 
 	// the optimization's engine, or null
 	static const IExternalEngine *Pengine();
+
+	// Whether the registered engine stores the relation itself. Asked while
+	// the query is translated, before the optimization has an engine.
+	static EExternalEngineRelation EeerRelation(ULONG rel_oid);
 
 	// The rest ask the optimization's engine and answer no without one.
 

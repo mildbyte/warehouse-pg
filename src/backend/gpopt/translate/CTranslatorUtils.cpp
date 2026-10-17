@@ -34,6 +34,7 @@ extern "C" {
 #include "gpos/common/CBitSetIter.h"
 #include "gpos/string/CWStringDynamic.h"
 
+#include "gpopt/base/CExternalEngine.h"
 #include "gpopt/base/CUtils.h"
 #include "gpopt/gpdbwrappers.h"
 #include "gpopt/mdcache/CMDAccessor.h"
@@ -140,6 +141,33 @@ CTranslatorUtils::GetTableDescr(CMemoryPool *mp, CMDAccessor *md_accessor,
 
 	IMDRelation::Ereldistrpolicy distribution_policy =
 		rel->GetRelDistribution();
+
+	// A table the external engine stores itself is read on the segments in
+	// whatever distribution the plan wants, but only engine plans can; the
+	// PG planner plans it otherwise.
+	switch (CExternalEngineUtils::EeerRelation(rel_oid))
+	{
+		case EeerDisabled:
+			GPOS_THROW_EXCEPTION(
+				gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+				GPOS_WSZ_LIT("Table stored by a disabled external engine"));
+		case EeerEnabled:
+			// the engine only reads such tables; PG's planner plans writes
+			if (UNASSIGNED_QUERYID != assigned_query_id_for_target_rel)
+			{
+				GPOS_THROW_EXCEPTION(
+					gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+					GPOS_WSZ_LIT("DML on a table stored by an external engine"));
+			}
+			if (nullptr != is_distributed_table)
+			{
+				*is_distributed_table = true;
+			}
+			distribution_policy = IMDRelation::EreldistrSentinel;
+			break;
+		case EeerNone:
+			break;
+	}
 
 	if (nullptr != is_distributed_table &&
 		(IMDRelation::EreldistrHash == distribution_policy ||

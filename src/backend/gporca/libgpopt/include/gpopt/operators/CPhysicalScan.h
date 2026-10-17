@@ -187,6 +187,17 @@ public:
 	CDistributionSpec *PdsDerive(CMemoryPool *mp,
 								 CExpressionHandle &exprhdl) const override;
 
+	// the distribution the scan produces, when it isn't the table's: an
+	// external engine that stores the table itself can read it as any
+	// distribution (takes ownership)
+	void SetDistributionSpec(CDistributionSpec *pds);
+
+	CDistributionSpec *
+	Pds() const
+	{
+		return m_pds;
+	}
+
 	// derive cte map
 	CCTEMap *
 	PcmDerive(CMemoryPool *mp,

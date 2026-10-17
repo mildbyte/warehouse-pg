@@ -18,6 +18,7 @@
 
 #include "naucrates/dxl/operators/CDXLPhysical.h"
 #include "naucrates/dxl/operators/CDXLTableDescr.h"
+#include "naucrates/md/IMDRelation.h"
 
 
 namespace gpdxl
@@ -43,6 +44,12 @@ private:
 	// table descriptor for the scanned table
 	CDXLTableDescr *m_dxl_table_descr;
 
+	// how an external engine reads the table, for a scan whose table it
+	// stores itself (EreldistrSentinel otherwise): every segment a slice of
+	// it (random) or all of it (replicated)
+	IMDRelation::Ereldistrpolicy m_engine_distribution =
+		IMDRelation::EreldistrSentinel;
+
 public:
 	CDXLPhysicalTableScan(CDXLPhysicalTableScan &) = delete;
 
@@ -56,6 +63,12 @@ public:
 
 	// setters
 	void SetTableDescriptor(CDXLTableDescr *);
+
+	void
+	SetEngineDistribution(IMDRelation::Ereldistrpolicy distribution)
+	{
+		m_engine_distribution = distribution;
+	}
 
 	// operator type
 	Edxlopid GetDXLOperator() const override;

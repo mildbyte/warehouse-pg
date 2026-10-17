@@ -762,6 +762,20 @@ CTranslatorExprToDXL::PdxlnTblScan(CExpression *pexprTblScan,
 	// filter included, as the leaf of a conversion
 	if (EeeExternal == popTblScan->ExecEngine())
 	{
+		IMDRelation::Ereldistrpolicy distribution =
+			IMDRelation::EreldistrSentinel;
+		switch (pds->Edt())
+		{
+			case CDistributionSpec::EdtRandom:
+				distribution = IMDRelation::EreldistrRandom;
+				break;
+			case CDistributionSpec::EdtStrictReplicated:
+				distribution = IMDRelation::EreldistrReplicated;
+				break;
+			default:
+				break;
+		}
+		pdxlopTS->SetEngineDistribution(distribution);
 		return PdxlnEngineConvert(
 			CTranslatorExprToDXLUtils::PdxlpropCopy(m_mp, pdxlnTblScan),
 			true /*fToEngine*/, false /*fIpc*/, pdxlnTblScan, nullptr);
