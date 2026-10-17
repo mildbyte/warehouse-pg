@@ -43,6 +43,7 @@ extern "C" {
 #include "optimizer/clauses.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/orca.h"
+#include "utils/guc.h"
 #include "optimizer/plancat.h"
 #include "optimizer/subselect.h"
 #include "parser/parse_agg.h"
@@ -762,19 +763,47 @@ gpdb::GetAttrStatsSlot(AttStatsSlot *sslot, HeapTuple statstuple, int reqkind,
 orca_relation_size_hook_type orca_relation_size_hook = nullptr;
 orca_att_stats_hook_type orca_att_stats_hook = nullptr;
 
+namespace
+{
+// Orca isn't reentrant, and the statistics hooks may run queries (through
+// SPI) to find their answers: those are planned by PG's planner. Declared
+// outside GP_WRAP_START, so the exception GP_WRAP_END raises for a PG error
+// restores the setting too.
+class CAutoPlannerOnly
+{
+	bool m_saved;
+
+public:
+	CAutoPlannerOnly() : m_saved(optimizer)
+	{
+		optimizer = false;
+	}
+	~CAutoPlannerOnly()
+	{
+		optimizer = m_saved;
+	}
+};
+}  // namespace
+
 HeapTuple
 gpdb::GetAttStats(Oid relid, AttrNumber attnum)
 {
+	if (orca_att_stats_hook != nullptr)
+	{
+		CAutoPlannerOnly planner_only;
+		HeapTuple tuple = nullptr;
+		GP_WRAP_START;
+		{
+			tuple = orca_att_stats_hook(relid, attnum);
+		}
+		GP_WRAP_END;
+		if (tuple != nullptr)
+		{
+			return tuple;
+		}
+	}
 	GP_WRAP_START;
 	{
-		if (orca_att_stats_hook != nullptr)
-		{
-			HeapTuple tuple = orca_att_stats_hook(relid, attnum);
-			if (tuple != nullptr)
-			{
-				return tuple;
-			}
-		}
 		/* catalog tables: pg_statistic */
 		return get_att_stats(relid, attnum);
 	}
@@ -1860,15 +1889,14 @@ gpdb::IsChildPartDistributionMismatched(Relation rel)
 double
 gpdb::CdbEstimatePartitionedNumTuples(Relation rel)
 {
+	double tuples;
+	PageEstimate pages;
+	if (ExtensionRelationSize(rel, &tuples, &pages))
+	{
+		return tuples;
+	}
 	GP_WRAP_START;
 	{
-		double tuples;
-		BlockNumber pages;
-		if (orca_relation_size_hook != nullptr &&
-			orca_relation_size_hook(RelationGetRelid(rel), &tuples, &pages))
-		{
-			return tuples;
-		}
 		return cdb_estimate_partitioned_numtuples(rel);
 	}
 	GP_WRAP_END;
@@ -1877,20 +1905,39 @@ gpdb::CdbEstimatePartitionedNumTuples(Relation rel)
 PageEstimate
 gpdb::CdbEstimatePartitionedNumPages(Relation rel)
 {
+	double tuples;
+	PageEstimate pages;
+	if (ExtensionRelationSize(rel, &tuples, &pages))
+	{
+		return pages;
+	}
 	GP_WRAP_START;
 	{
-		double tuples;
-		BlockNumber pages;
-		if (orca_relation_size_hook != nullptr &&
-			orca_relation_size_hook(RelationGetRelid(rel), &tuples, &pages))
-		{
-			PageEstimate estimate = {.totalpages = pages,
-									 .totalallvisiblepages = pages};
-			return estimate;
-		}
 		return cdb_estimate_partitioned_numpages(rel);
 	}
 	GP_WRAP_END;
+}
+
+bool
+gpdb::ExtensionRelationSize(Relation rel, double *tuples, PageEstimate *pages)
+{
+	if (orca_relation_size_hook == nullptr)
+	{
+		return false;
+	}
+	CAutoPlannerOnly planner_only;
+	bool found = false;
+	BlockNumber blocks = 0;
+	GP_WRAP_START;
+	{
+		found = orca_relation_size_hook(RelationGetRelid(rel), tuples, &blocks);
+	}
+	GP_WRAP_END;
+	if (found)
+	{
+		*pages = {.totalpages = blocks, .totalallvisiblepages = blocks};
+	}
+	return found;
 }
 
 void

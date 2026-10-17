@@ -142,9 +142,12 @@ CTranslatorUtils::GetTableDescr(CMemoryPool *mp, CMDAccessor *md_accessor,
 	IMDRelation::Ereldistrpolicy distribution_policy =
 		rel->GetRelDistribution();
 
-	// A table the external engine stores itself is read on the segments in
-	// whatever distribution the plan wants, but only engine plans can; the
-	// PG planner plans it otherwise.
+	// A table the external engine stores itself: Orca plans it only while
+	// the engine is on, and never as a DML target (the PG planner plans
+	// those). Its scans keep the table's distribution policy (PG reads a
+	// replicated one on any segment); the engine adds scans that read it as
+	// any distribution (IExternalEngine::AddAlternatives).
+	BOOL engine_relation = false;
 	switch (CExternalEngineUtils::EeerRelation(rel_oid))
 	{
 		case EeerDisabled:
@@ -159,24 +162,22 @@ CTranslatorUtils::GetTableDescr(CMemoryPool *mp, CMDAccessor *md_accessor,
 					gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
 					GPOS_WSZ_LIT("DML on a table stored by an external engine"));
 			}
-			if (nullptr != is_distributed_table)
-			{
-				*is_distributed_table = true;
-			}
-			distribution_policy = IMDRelation::EreldistrSentinel;
+			engine_relation = true;
 			break;
 		case EeerNone:
 			break;
 	}
 
 	if (nullptr != is_distributed_table &&
-		(IMDRelation::EreldistrHash == distribution_policy ||
+		(engine_relation ||
+		 IMDRelation::EreldistrHash == distribution_policy ||
 		 IMDRelation::EreldistrRandom == distribution_policy ||
 		 IMDRelation::EreldistrReplicated == distribution_policy))
 	{
 		*is_distributed_table = true;
 	}
-	else if (IMDRelation::ErelstorageForeign != rel->RetrieveRelStorageType() &&
+	else if (!engine_relation &&
+			 IMDRelation::ErelstorageForeign != rel->RetrieveRelStorageType() &&
 			 !optimizer_enable_coordinator_only_queries &&
 			 (IMDRelation::EreldistrCoordinatorOnly == distribution_policy))
 	{

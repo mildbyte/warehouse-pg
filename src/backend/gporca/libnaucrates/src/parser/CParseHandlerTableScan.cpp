@@ -54,10 +54,18 @@ void
 CParseHandlerTableScan::StartElement(const XMLCh *const,  // element_uri,
 									 const XMLCh *const element_local_name,
 									 const XMLCh *const,  // element_qname
-									 const Attributes &	  // attrs
-)
+									 const Attributes &attrs)
 {
 	StartElement(element_local_name, EdxltokenPhysicalTableScan);
+
+	// an external engine's scan of a table it stores itself
+	const XMLCh *distribution =
+		attrs.getValue(CDXLTokens::XmlstrToken(EdxltokenRelDistrPolicy));
+	if (nullptr != distribution)
+	{
+		CDXLPhysicalTableScan::Cast(m_dxl_op)->SetEngineDistribution(
+			CDXLOperatorFactory::ParseRelationDistPolicy(distribution));
+	}
 }
 
 //---------------------------------------------------------------------------

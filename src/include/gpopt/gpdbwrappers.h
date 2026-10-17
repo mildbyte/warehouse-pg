@@ -501,6 +501,9 @@ double CdbEstimatePartitionedNumTuples(Relation rel);
 
 PageEstimate CdbEstimatePartitionedNumPages(Relation rel);
 
+// the relation's size from orca_relation_size_hook, when an extension knows it
+bool ExtensionRelationSize(Relation rel, double *tuples, PageEstimate *pages);
+
 // close the given relation
 void CloseRelation(Relation rel);
 

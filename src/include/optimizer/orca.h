@@ -41,6 +41,9 @@ extern PGDLLIMPORT plan_hint_hook_type plan_hint_hook;
  *
  * orca_att_stats_hook: a pg_statistic tuple for the column, palloc'd (the
  * caller frees it), or NULL to read pg_statistic.
+ *
+ * Both run with the optimizer GUC off, as Orca isn't reentrant: queries they
+ * run (through SPI) are planned by PG's planner.
  */
 typedef bool (*orca_relation_size_hook_type) (Oid relid, double *tuples,
 											  BlockNumber *pages);

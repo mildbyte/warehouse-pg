@@ -70,6 +70,12 @@ public:
 		m_engine_distribution = distribution;
 	}
 
+	IMDRelation::Ereldistrpolicy
+	GetEngineDistribution() const
+	{
+		return m_engine_distribution;
+	}
+
 	// operator type
 	Edxlopid GetDXLOperator() const override;
 

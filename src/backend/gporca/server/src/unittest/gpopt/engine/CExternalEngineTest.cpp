@@ -319,6 +319,16 @@ CExternalEngineTest::EresUnittest_Register()
 
 	CExternalEngineUtils::Unregister();
 	GPOS_UNITTEST_ASSERT(nullptr == CExternalEngineUtils::PengineCreate(mp));
+
+	// the engine says which tables it stores itself, while registered
+	GPOS_UNITTEST_ASSERT(EeerNone == CExternalEngineUtils::EeerRelation(42));
+	GPOS_UNITTEST_ASSERT(CExternalEngineUtils::Register(
+		"test", PengineTestCreate, SzExternalEngineBuild(),
+		[](ULONG oid) { return 42 == oid ? EeerEnabled : EeerNone; }));
+	GPOS_UNITTEST_ASSERT(EeerEnabled == CExternalEngineUtils::EeerRelation(42));
+	GPOS_UNITTEST_ASSERT(EeerNone == CExternalEngineUtils::EeerRelation(43));
+	CExternalEngineUtils::Unregister();
+	GPOS_UNITTEST_ASSERT(EeerNone == CExternalEngineUtils::EeerRelation(42));
 	return GPOS_OK;
 }
 
