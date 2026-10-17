@@ -42,6 +42,7 @@ extern "C" {
 #include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
 #include "optimizer/optimizer.h"
+#include "optimizer/orca.h"
 #include "optimizer/plancat.h"
 #include "optimizer/subselect.h"
 #include "parser/parse_agg.h"
@@ -758,11 +759,22 @@ gpdb::GetAttrStatsSlot(AttStatsSlot *sslot, HeapTuple statstuple, int reqkind,
 	return false;
 }
 
+orca_relation_size_hook_type orca_relation_size_hook = nullptr;
+orca_att_stats_hook_type orca_att_stats_hook = nullptr;
+
 HeapTuple
 gpdb::GetAttStats(Oid relid, AttrNumber attnum)
 {
 	GP_WRAP_START;
 	{
+		if (orca_att_stats_hook != nullptr)
+		{
+			HeapTuple tuple = orca_att_stats_hook(relid, attnum);
+			if (tuple != nullptr)
+			{
+				return tuple;
+			}
+		}
 		/* catalog tables: pg_statistic */
 		return get_att_stats(relid, attnum);
 	}
@@ -1850,6 +1862,13 @@ gpdb::CdbEstimatePartitionedNumTuples(Relation rel)
 {
 	GP_WRAP_START;
 	{
+		double tuples;
+		BlockNumber pages;
+		if (orca_relation_size_hook != nullptr &&
+			orca_relation_size_hook(RelationGetRelid(rel), &tuples, &pages))
+		{
+			return tuples;
+		}
 		return cdb_estimate_partitioned_numtuples(rel);
 	}
 	GP_WRAP_END;
@@ -1860,6 +1879,15 @@ gpdb::CdbEstimatePartitionedNumPages(Relation rel)
 {
 	GP_WRAP_START;
 	{
+		double tuples;
+		BlockNumber pages;
+		if (orca_relation_size_hook != nullptr &&
+			orca_relation_size_hook(RelationGetRelid(rel), &tuples, &pages))
+		{
+			PageEstimate estimate = {.totalpages = pages,
+									 .totalallvisiblepages = pages};
+			return estimate;
+		}
 		return cdb_estimate_partitioned_numpages(rel);
 	}
 	GP_WRAP_END;
