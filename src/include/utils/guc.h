@@ -546,6 +546,7 @@ extern int optimizer_segments;
 extern int optimizer_penalize_broadcast_threshold;
 extern double optimizer_cost_threshold;
 extern double optimizer_nestloop_factor;
+extern int optimizer_hashjoin_spill_mem;
 extern double optimizer_sort_factor;
 
 /* Optimizer hints */
