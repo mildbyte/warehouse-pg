@@ -435,6 +435,17 @@ COptTasks::SetCostModelParams(ICostModel *cost_model)
 			cost_param->Id(), nlj_factor, nlj_factor - 0.5, nlj_factor + 0.5);
 	}
 
+	if (optimizer_hashjoin_spill_mem > 0)
+	{
+		// hash tables up to this size per segment don't spill
+		ICostModelParams::SCostParam *cost_param =
+			cost_model->GetCostModelParams()->PcpLookup(
+				CCostModelParamsGPDB::EcpHJSpillingMemThreshold);
+		CDouble threshold(optimizer_hashjoin_spill_mem * 1024.0);
+		cost_model->GetCostModelParams()->SetParam(
+			cost_param->Id(), threshold, threshold, threshold);
+	}
+
 	if (optimizer_sort_factor > 1.0 || optimizer_sort_factor < 1.0)
 	{
 		// change sort cost factor

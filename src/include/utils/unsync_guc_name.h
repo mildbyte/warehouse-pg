@@ -409,6 +409,7 @@
 		"optimizer_force_expanded_distinct_aggs",
 		"optimizer_force_multistage_agg",
 		"optimizer_force_three_stage_scalar_dqa",
+		"optimizer_hashjoin_spill_mem",
 		"optimizer_join_arity_for_associativity_commutativity",
 		"optimizer_join_order",
 		"optimizer_join_order_threshold",

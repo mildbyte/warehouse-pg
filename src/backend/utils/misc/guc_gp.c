@@ -373,6 +373,7 @@ int			optimizer_segments;
 int			optimizer_penalize_broadcast_threshold;
 double		optimizer_cost_threshold;
 double		optimizer_nestloop_factor;
+int			optimizer_hashjoin_spill_mem;
 double		optimizer_sort_factor;
 
 /* Optimizer hints */
@@ -4239,6 +4240,17 @@ struct config_int ConfigureNamesInt_gp[] =
             0, 0, 100,
             NULL, NULL, NULL
     },
+
+	{
+		{"optimizer_hashjoin_spill_mem", PGC_USERSET, QUERY_TUNING_OTHER,
+			gettext_noop("Hash table size per segment past which the optimizer costs a hash join as spilling."),
+			gettext_noop("0 keeps the built-in 50MB."),
+			GUC_UNIT_KB | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_hashjoin_spill_mem,
+		0, 0, MAX_KILOBYTES,
+		NULL, NULL, NULL
+	},
 
 	{
 		{"optimizer_join_order_threshold", PGC_USERSET, QUERY_TUNING_METHOD,
