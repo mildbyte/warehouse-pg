@@ -1,0 +1,9 @@
+test_memquota_hook tests plan_memory_hook (src/include/cdb/memquota.h),
+through which an extension says how many memory-intensive operators a plan
+node counts as when the memory policy splits the statement's memory, and
+whether it is blocking, which EAGER_FREE groups the operators by.
+
+The module counts each Sort as test_memquota_hook.sort_ops operators, makes
+a Hash Join's outer input blocking with test_memquota_hook.outer_blocking, and
+reports the operatorMemKB the policy gave each node of the plan as the query
+starts on the coordinator, which is where the memory is assigned.
