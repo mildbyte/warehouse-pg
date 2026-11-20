@@ -110,6 +110,15 @@ function run_installcheck() {
     else
         # WHPG 7+
         PG_TEST_EXTRA="kerberos ssl" make -s ${MAKE_FLAGS} PGOPTIONS="${PGOPTIONS}" ${test_target}
+
+        # Neither target runs src/test/modules (src/test/Makefile leaves it
+        # out of installcheck). test_memquota_hook tests memquota's
+        # extension hook and sets optimizer itself, so it runs once, in the
+        # optimizer=on job of the regress suite.
+        if [[ "${test_target}" != "installcheck-hot-standby" && "${PGOPTIONS}" == *"optimizer=on"* ]]; then
+            make -s -C "${WHPG_SRC}/src/test/modules/test_memquota_hook" install
+            make -s ${MAKE_FLAGS} -C "${WHPG_SRC}/src/test/modules/test_memquota_hook" installcheck
+        fi
     fi
 
     echo "========================================================================"

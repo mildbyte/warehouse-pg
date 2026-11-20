@@ -42,6 +42,8 @@ bool						*gp_log_resmanager_memory = &gp_log_resmanager_memory_default;
 int							*gp_resmanager_memory_policy_auto_fixed_mem = &gp_resmanager_memory_policy_auto_fixed_mem_default;
 bool						*gp_resmanager_print_operator_memory_limits = &gp_resmanager_print_operator_memory_limits_default;
 
+plan_mem_intensive_ops_hook_type plan_mem_intensive_ops_hook = NULL;
+
 /**
  * Policy Auto. This contains information that will be used by Policy AUTO
  */
@@ -61,6 +63,7 @@ static bool PolicyAutoPrelimWalker(Node *node, PolicyAutoContext *context);
 static bool	PolicyAutoAssignWalker(Node *node, PolicyAutoContext *context);
 static bool IsAggMemoryIntensive(Agg *agg);
 static bool IsMemoryIntensiveOperator(Node *node, PlannedStmt *stmt);
+static uint64 MemIntenseOps(Node *node, PlannedStmt *stmt);
 
 struct OperatorGroupNode;
 
@@ -270,6 +273,24 @@ IsMemoryIntensiveOperator(Node *node, PlannedStmt *stmt)
 }
 
 /*
+ * MemIntenseOps
+ *    The number of memory-intensive operators a plan node counts as: one
+ * or none, unless plan_mem_intensive_ops_hook says otherwise.
+ */
+static uint64
+MemIntenseOps(Node *node, PlannedStmt *stmt)
+{
+	if (plan_mem_intensive_ops_hook)
+	{
+		int			n = plan_mem_intensive_ops_hook((Plan *) node, stmt);
+
+		if (n >= 0)
+			return (uint64) n;
+	}
+	return IsMemoryIntensiveOperator(node, stmt) ? 1 : 0;
+}
+
+/*
  * IsRootOperatorInGroup
  *    Return true if the given node is the root operator in an operator group.
  *
@@ -300,9 +321,11 @@ static bool PolicyAutoPrelimWalker(Node *node, PolicyAutoContext *context)
 	Assert(context);
 	if (is_plan_node(node))
 	{
-		if (IsMemoryIntensiveOperator(node, context->plannedStmt))
+		uint64		ops = MemIntenseOps(node, context->plannedStmt);
+
+		if (ops > 0)
 		{
-			context->numMemIntensiveOperators++;
+			context->numMemIntensiveOperators += ops;
 		}
 		else
 		{
@@ -331,11 +354,12 @@ static bool PolicyAutoAssignWalker(Node *node, PolicyAutoContext *context)
 	if (is_plan_node(node))
 	{
 		Plan *planNode = (Plan *) node;
+		uint64		ops = MemIntenseOps(node, context->plannedStmt);
 
 		/**
 		 * If the operator is not a memory intensive operator, give it fixed amount of memory.
 		 */
-		if (!IsMemoryIntensiveOperator(node, context->plannedStmt))
+		if (ops == 0)
 		{
 			planNode->operatorMemKB = nonMemIntenseOpMemKB;
 		}
@@ -343,7 +367,7 @@ static bool PolicyAutoAssignWalker(Node *node, PolicyAutoContext *context)
 		{
 			planNode->operatorMemKB = (uint64) ( (double) context->queryMemKB
 					- (double) context->numNonMemIntensiveOperators * nonMemIntenseOpMemKB)
-					/ context->numMemIntensiveOperators;
+					/ context->numMemIntensiveOperators * ops;
 		}
 
 		Assert(planNode->operatorMemKB > 0);
@@ -453,9 +477,11 @@ IncrementOperatorCount(Node *node, OperatorGroupNode *groupNode, PlannedStmt *st
 	Assert(node != NULL);
 	Assert(groupNode != NULL);
 
-	if (IsMemoryIntensiveOperator(node, stmt))
+	uint64		ops = MemIntenseOps(node, stmt);
+
+	if (ops > 0)
 	{
-		groupNode->numMemIntenseOps++;
+		groupNode->numMemIntenseOps += ops;
 	}
 	else
 	{
@@ -789,7 +815,9 @@ PolicyEagerFreeAssignWalker(Node *node, PolicyEagerFreeContext *context)
 			ComputeMemLimitForChildGroups(GetParentOperatorGroup(context->groupNode));
 		}
 
-		if (!IsMemoryIntensiveOperator(node, context->plannedStmt))
+		uint64		ops = MemIntenseOps(node, context->plannedStmt);
+
+		if (ops == 0)
 		{
 			planNode->operatorMemKB = nonMemIntenseOpMemKB;
 		}
@@ -797,9 +825,9 @@ PolicyEagerFreeAssignWalker(Node *node, PolicyEagerFreeContext *context)
 		{
 			/*
 			 * Evenly distribute the remaining memory among all memory-intensive
-			 * operators.
+			 * operators, a node counting as several getting their shares.
 			 */
-			uint64 memKB = ComputeAvgMemKBForMemIntenseOp(context->groupNode);
+			uint64 memKB = ComputeAvgMemKBForMemIntenseOp(context->groupNode) * ops;
 
 			planNode->operatorMemKB = memKB;
 
@@ -813,7 +841,8 @@ PolicyEagerFreeAssignWalker(Node *node, PolicyEagerFreeContext *context)
 			if (IsRootOperatorInGroup(node) &&
 				parentGroupNode != NULL)
 			{
-				uint64 memKBInParentGroup = ComputeAvgMemKBForMemIntenseOp(parentGroupNode);
+				uint64 memKBInParentGroup =
+					ComputeAvgMemKBForMemIntenseOp(parentGroupNode) * ops;
 
 				if (memKBInParentGroup < planNode->operatorMemKB)
 				{
@@ -888,6 +917,28 @@ PolicyEagerFreeAssignOperatorMemoryKB(PlannedStmt *stmt, uint64 memAvailableByte
 		PolicyEagerFreeAssignWalker((Node *) stmt->planTree, &ctx);
 
 	Assert(!result);
+}
+
+/*
+ * AssignOperatorMemoryKB
+ *    Set the operatorMemKB of every node of the plan, by the memory policy,
+ * from the statement's memory.
+ */
+void
+AssignOperatorMemoryKB(PlannedStmt *stmt, uint64 memAvailableBytes)
+{
+	switch (*gp_resmanager_memory_policy)
+	{
+		case RESMANAGER_MEMORY_POLICY_AUTO:
+			PolicyAutoAssignOperatorMemoryKB(stmt, memAvailableBytes);
+			break;
+		case RESMANAGER_MEMORY_POLICY_EAGER_FREE:
+			PolicyEagerFreeAssignOperatorMemoryKB(stmt, memAvailableBytes);
+			break;
+		default:
+			Assert(IsResManagerMemoryPolicyNone());
+			break;
+	}
 }
 
 /*
